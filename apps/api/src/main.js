@@ -11,6 +11,14 @@ app.use(express.json());
 
 const dbPath = process.env.DB_PATH || path.join(__dirname, "../motoclinic.db");
 const db = new Database(dbPath);
+const fs = require("fs");
+
+const schemaPath = path.join(__dirname, "../../../packages/db/schema.sql");
+
+if (fs.existsSync(schemaPath)) {
+  const schema = fs.readFileSync(schemaPath, "utf8");
+  db.exec(schema);
+}
 
 db.pragma("foreign_keys = ON");
 
