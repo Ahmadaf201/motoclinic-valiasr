@@ -1,0 +1,6 @@
+{
+  "name": "@motoclinic/db",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Database package for Moto Clinic Valiasr"
+}
