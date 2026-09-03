@@ -144,7 +144,96 @@ function showMessage(text) {
 }
 
 function newCustomer() {
-  showMessage("👤 فرم ثبت مشتری را در مرحله بعد فعال می‌کنیم.");
+  document.getElementById("message").innerHTML = `
+    <div style="
+      padding:20px;
+      background:#fff;
+      border-radius:15px;
+      margin-top:20px;
+    ">
+
+      <h2>👤 ثبت مشتری جدید</h2>
+
+      <input
+        id="customerName"
+        placeholder="نام و نام خانوادگی"
+        style="width:100%;padding:14px;margin:8px 0;border-radius:10px;border:1px solid #ddd;"
+      >
+
+      <input
+        id="customerPhone"
+        placeholder="شماره موبایل"
+        type="tel"
+        style="width:100%;padding:14px;margin:8px 0;border-radius:10px;border:1px solid #ddd;"
+      >
+
+      <input
+        id="customerAddress"
+        placeholder="آدرس"
+        style="width:100%;padding:14px;margin:8px 0;border-radius:10px;border:1px solid #ddd;"
+      >
+
+      <textarea
+        id="customerNotes"
+        placeholder="توضیحات"
+        style="width:100%;padding:14px;margin:8px 0;border-radius:10px;border:1px solid #ddd;"
+      ></textarea>
+
+      <button
+        onclick="saveCustomer()"
+        style="${buttonStyle}"
+      >
+        💾 ذخیره مشتری
+      </button>
+
+    </div>
+  `;
+}
+
+async function saveCustomer() {
+  const name = document.getElementById("customerName").value.trim();
+  const phone = document.getElementById("customerPhone").value.trim();
+  const address = document.getElementById("customerAddress").value.trim();
+  const notes = document.getElementById("customerNotes").value.trim();
+
+  if (!name) {
+    showMessage("⚠️ نام مشتری را وارد کنید.");
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_URL}/customers`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        name,
+        phone,
+        address,
+        notes
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "خطا در ثبت مشتری");
+    }
+
+    showMessage(`
+      <div>
+        <strong>✅ مشتری با موفقیت ثبت شد.</strong>
+        <br>
+        شناسه مشتری: ${data.id}
+      </div>
+    `);
+
+    loadDashboard();
+
+  } catch (error) {
+    showMessage(`❌ ${error.message}`);
+  }
 }
 
 function newMotorcycle() {
