@@ -1,0 +1,10 @@
+{
+  "name": "@motoclinic/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "هسته مشترک نرم افزار موتو کلینیک ولیعصر (عج)",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node --test"
+  }
+}
