@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "tsx watch apps/api/src/main.ts",
     "build": "tsc -p apps/api/tsconfig.json",
-    "start": "tsx apps/api/src/main.ts"
+    "start": "tsx apps/api/src/migrate.ts && tsx apps/api/src/main.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",
