@@ -9,15 +9,30 @@ app.use(express.json());
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl:
-    process.env.NODE_ENV === "production"
-      ? { rejectUnauthorized: false }
-      : false,
+  ssl: process.env.NODE_ENV === "production"
+    ? { rejectUnauthorized: false }
+    : false
 });
 
-// ─────────────────────────────────────────────
-// HEALTH
-// ─────────────────────────────────────────────
+const PORT = Number(process.env.PORT || 10000);
+
+const CASE_STATUSES = [
+  "OPEN",
+  "DIAGNOSIS",
+  "WAITING_APPROVAL",
+  "IN_PROGRESS",
+  "WAITING_PARTS",
+  "READY",
+  "COMPLETED",
+  "CLOSED"
+];
+
+const PRIORITIES = [
+  "LOW",
+  "NORMAL",
+  "HIGH",
+  "URGENT"
+];
 
 app.get("/api/health", async (_req, res) => {
   try {
@@ -26,86 +41,81 @@ app.get("/api/health", async (_req, res) => {
     res.json({
       ok: true,
       service: "motoclinic-api",
-      version: "0.4.0",
-      database: "connected",
+      version: "0.5.0",
+      database: "connected"
     });
+
   } catch (error) {
-    console.error(error);
 
     res.status(500).json({
       ok: false,
       service: "motoclinic-api",
-      version: "0.4.0",
+      version: "0.5.0",
       database: "disconnected",
+      error: error instanceof Error ? error.message : "Database error"
     });
   }
 });
 
-// ─────────────────────────────────────────────
-// API INFO
-// ─────────────────────────────────────────────
-
 app.get("/api", (_req, res) => {
   res.json({
-    name: "موتو کلینیک ولیعصر(عج)",
-    message: "سیستم مدیریت هوشمند تعمیرگاه موتورسیکلت",
-    version: "0.4.0",
+    ok: true,
+    service: "motoclinic-api",
+    version: "0.5.0"
   });
 });
 
-// ─────────────────────────────────────────────
-// DASHBOARD
-// ─────────────────────────────────────────────
+/* =========================
+   DASHBOARD
+========================= */
 
 app.get("/api/dashboard", async (_req, res) => {
+
   try {
-    const customers = await pool.query(
-      "SELECT COUNT(*)::int AS count FROM customers"
-    );
 
-    const motorcycles = await pool.query(
-      "SELECT COUNT(*)::int AS count FROM motorcycles"
-    );
+    const customers =
+      await pool.query("SELECT COUNT(*)::int AS count FROM customers");
 
-    const activeCases = await pool.query(`
-      SELECT COUNT(*)::int AS count
-      FROM service_cases
-      WHERE status NOT IN ('CLOSED', 'COMPLETED')
-    `);
+    const motorcycles =
+      await pool.query("SELECT COUNT(*)::int AS count FROM motorcycles");
 
-    const revenue = await pool.query(`
-      SELECT COALESCE(SUM(amount), 0)::numeric AS total
-      FROM payments
-    `);
+    const activeCases =
+      await pool.query(`
+        SELECT COUNT(*)::int AS count
+        FROM service_cases
+        WHERE status NOT IN ('COMPLETED', 'CLOSED')
+      `);
 
-    const ready = await pool.query(`
-      SELECT COUNT(*)::int AS count
-      FROM service_cases
-      WHERE status = 'READY'
-    `);
+    const revenue =
+      await pool.query(`
+        SELECT COALESCE(SUM(amount), 0)::numeric AS total
+        FROM payments
+      `);
 
     res.json({
       customers: customers.rows[0].count,
       motorcycles: motorcycles.rows[0].count,
       activeCases: activeCases.rows[0].count,
-      revenue: Number(revenue.rows[0].total),
-      ready: ready.rows[0].count,
+      revenue: revenue.rows[0].total,
+      ready: true
     });
+
   } catch (error) {
-    console.error(error);
 
     res.status(500).json({
-      error: "خطا در دریافت اطلاعات داشبورد",
+      error: error instanceof Error ? error.message : "Dashboard error"
     });
   }
 });
 
-// ─────────────────────────────────────────────
-// CUSTOMERS
-// ─────────────────────────────────────────────
+/* =========================
+   CUSTOMERS
+========================= */
 
 app.get("/api/customers", async (_req, res) => {
+
   try {
+
     const result = await pool.query(`
       SELECT
         id,
@@ -119,77 +129,67 @@ app.get("/api/customers", async (_req, res) => {
     `);
 
     res.json(result.rows);
+
   } catch (error) {
-    console.error(error);
 
     res.status(500).json({
-      error: "خطا در دریافت مشتریان",
+      error: error instanceof Error ? error.message : "Customers error"
     });
   }
 });
 
 app.post("/api/customers", async (req, res) => {
-  try {
-    const { name, phone, address, notes } = req.body;
 
-    if (!name || !String(name).trim()) {
+  try {
+
+    const {
+      name,
+      phone,
+      address = "",
+      notes = ""
+    } = req.body;
+
+    if (!name || !phone) {
       return res.status(400).json({
-        error: "نام مشتری الزامی است.",
+        error: "نام و شماره تماس الزامی است"
       });
     }
 
-    const result = await pool.query(
-      `
+    const result = await pool.query(`
       INSERT INTO customers
         (name, phone, address, notes)
       VALUES
         ($1, $2, $3, $4)
-      RETURNING
-        id,
-        name,
-        phone,
-        address,
-        notes,
-        created_at
-      `,
-      [
-        String(name).trim(),
-        phone ? String(phone).trim() : "",
-        address ? String(address).trim() : null,
-        notes ? String(notes).trim() : null,
-      ]
-    );
+      RETURNING *
+    `, [
+      name,
+      phone,
+      address,
+      notes
+    ]);
 
     res.status(201).json(result.rows[0]);
+
   } catch (error) {
-    console.error(error);
 
     res.status(500).json({
-      error: "خطا در ثبت مشتری",
+      error: error instanceof Error ? error.message : "Create customer error"
     });
   }
 });
 
-// ─────────────────────────────────────────────
-// MOTORCYCLES
-// ─────────────────────────────────────────────
+/* =========================
+   MOTORCYCLES
+========================= */
 
 app.get("/api/motorcycles", async (_req, res) => {
+
   try {
+
     const result = await pool.query(`
       SELECT
-        m.id,
-        m.customer_id,
-        c.name AS customer_name,
-        c.phone AS customer_phone,
-        m.plate,
-        m.brand,
-        m.model,
-        m.year,
-        m.color,
-        m.vin,
-        m.mileage,
-        m.created_at
+        m.*,
+        c.name AS customer_name
       FROM motorcycles m
       JOIN customers c
         ON c.id = m.customer_id
@@ -197,91 +197,70 @@ app.get("/api/motorcycles", async (_req, res) => {
     `);
 
     res.json(result.rows);
+
   } catch (error) {
-    console.error(error);
 
     res.status(500).json({
-      error: "خطا در دریافت موتورسیکلت‌ها",
+      error: error instanceof Error ? error.message : "Motorcycles error"
     });
   }
 });
 
-app.get("/api/customers/:customerId/motorcycles", async (req, res) => {
-  try {
-    const { customerId } = req.params;
+app.get("/api/motorcycles/customer/:customerId", async (req, res) => {
 
-    const result = await pool.query(
-      `
-      SELECT
-        id,
-        customer_id,
-        plate,
-        brand,
-        model,
-        year,
-        color,
-        vin,
-        mileage,
-        created_at
+  try {
+
+    const result = await pool.query(`
+      SELECT *
       FROM motorcycles
       WHERE customer_id = $1
       ORDER BY created_at DESC
-      `,
-      [customerId]
-    );
+    `, [req.params.customerId]);
 
     res.json(result.rows);
+
   } catch (error) {
-    console.error(error);
 
     res.status(500).json({
-      error: "خطا در دریافت موتورسیکلت‌های مشتری",
+      error: error instanceof Error ? error.message : "Customer motorcycles error"
     });
   }
 });
 
 app.post("/api/motorcycles", async (req, res) => {
+
   try {
+
     const {
-      customerId,
+      customer_id,
       plate,
-      brand,
-      model,
-      year,
-      color,
-      vin,
-      mileage,
+      brand = "",
+      model = "",
+      year = null,
+      color = "",
+      vin = "",
+      mileage = 0
     } = req.body;
 
-    if (!customerId) {
+    if (!customer_id || !plate) {
       return res.status(400).json({
-        error: "انتخاب مشتری الزامی است.",
+        error: "مشتری و پلاک الزامی هستند"
       });
     }
 
-    if (!plate || !String(plate).trim()) {
+    const customer =
+      await pool.query(
+        "SELECT id FROM customers WHERE id = $1",
+        [customer_id]
+      );
+
+    if (!customer.rowCount) {
       return res.status(400).json({
-        error: "شماره پلاک الزامی است.",
+        error: "مشتری پیدا نشد"
       });
     }
 
-    const customer = await pool.query(
-      `
-      SELECT id
-      FROM customers
-      WHERE id = $1
-      `,
-      [customerId]
-    );
-
-    if (customer.rowCount === 0) {
-      return res.status(404).json({
-        error: "مشتری پیدا نشد.",
-      });
-    }
-
-    const result = await pool.query(
-      `
+    const result = await pool.query(`
       INSERT INTO motorcycles
         (
           customer_id,
@@ -294,66 +273,44 @@ app.post("/api/motorcycles", async (req, res) => {
           mileage
         )
       VALUES
-        ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING
-        id,
-        customer_id,
-        plate,
-        brand,
-        model,
-        year,
-        color,
-        vin,
-        mileage,
-        created_at
-      `,
-      [
-        customerId,
-        String(plate).trim(),
-        brand ? String(brand).trim() : null,
-        model ? String(model).trim() : null,
-        year ? Number(year) : null,
-        color ? String(color).trim() : null,
-        vin ? String(vin).trim() : null,
-        mileage ? Number(mileage) : 0,
-      ]
-    );
+        ($1,$2,$3,$4,$5,$6,$7,$8)
+      RETURNING *
+    `, [
+      customer_id,
+      plate,
+      brand,
+      model,
+      year,
+      color,
+      vin,
+      mileage
+    ]);
 
     res.status(201).json(result.rows[0]);
+
   } catch (error) {
-    console.error(error);
 
     res.status(500).json({
-      error: "خطا در ثبت موتورسیکلت",
+      error: error instanceof Error ? error.message : "Create motorcycle error"
     });
   }
 });
 
-// ─────────────────────────────────────────────
-// SERVICE CASES
-// ─────────────────────────────────────────────
+/* =========================
+   SERVICE CASES
+========================= */
 
-// دریافت پرونده‌های تعمیر
 app.get("/api/cases", async (_req, res) => {
+
   try {
+
     const result = await pool.query(`
       SELECT
-        sc.id,
-        sc.customer_id,
-        sc.motorcycle_id,
+        sc.*,
         c.name AS customer_name,
-        c.phone AS customer_phone,
         m.plate,
         m.brand,
-        m.model,
-        m.color,
-        sc.complaint,
-        sc.diagnosis,
-        sc.status,
-        sc.priority,
-        sc.opened_at,
-        sc.closed_at,
-        sc.created_at
+        m.model
       FROM service_cases sc
       JOIN customers c
         ON c.id = sc.customer_id
@@ -363,72 +320,57 @@ app.get("/api/cases", async (_req, res) => {
     `);
 
     res.json(result.rows);
+
   } catch (error) {
-    console.error(error);
 
     res.status(500).json({
-      error: "خطا در دریافت پرونده‌های تعمیر",
+      error: error instanceof Error ? error.message : "Cases error"
     });
   }
 });
 
-// ثبت پرونده تعمیر
 app.post("/api/cases", async (req, res) => {
+
   try {
+
     const {
-      customerId,
-      motorcycleId,
+      customer_id,
+      motorcycle_id,
       complaint,
-      diagnosis,
-      priority,
+      diagnosis = "",
+      priority = "NORMAL"
     } = req.body;
 
-    if (!customerId) {
+    if (!customer_id || !motorcycle_id || !complaint) {
       return res.status(400).json({
-        error: "انتخاب مشتری الزامی است.",
+        error: "مشتری، موتورسیکلت و شرح مشکل الزامی هستند"
       });
     }
 
-    if (!motorcycleId) {
+    if (!PRIORITIES.includes(priority)) {
       return res.status(400).json({
-        error: "انتخاب موتورسیکلت الزامی است.",
+        error: "اولویت نامعتبر است"
       });
     }
 
-    if (!complaint || !String(complaint).trim()) {
+    const motorcycle =
+      await pool.query(`
+        SELECT id
+        FROM motorcycles
+        WHERE id = $1
+          AND customer_id = $2
+      `, [
+        motorcycle_id,
+        customer_id
+      ]);
+
+    if (!motorcycle.rowCount) {
       return res.status(400).json({
-        error: "شرح مشکل الزامی است.",
+        error: "این موتورسیکلت متعلق به مشتری انتخاب‌شده نیست"
       });
     }
 
-    const motorcycle = await pool.query(
-      `
-      SELECT id, customer_id
-      FROM motorcycles
-      WHERE id = $1
-      `,
-      [motorcycleId]
-    );
-
-    if (motorcycle.rowCount === 0) {
-      return res.status(404).json({
-        error: "موتورسیکلت پیدا نشد.",
-      });
-    }
-
-    if (motorcycle.rows[0].customer_id !== customerId) {
-      return res.status(400).json({
-        error: "این موتورسیکلت متعلق به مشتری انتخاب‌شده نیست.",
-      });
-    }
-
-    const allowedPriorities = ["LOW", "NORMAL", "HIGH", "URGENT"];
-    const selectedPriority = allowedPriorities.includes(priority)
-      ? priority
-      : "NORMAL";
-
-    const result = await pool.query(
-      `
+    const result = await pool.query(`
       INSERT INTO service_cases
         (
           customer_id,
@@ -439,155 +381,155 @@ app.post("/api/cases", async (req, res) => {
           priority
         )
       VALUES
-        ($1, $2, $3, $4, 'OPEN', $5)
-      RETURNING
-        id,
-        customer_id,
-        motorcycle_id,
-        complaint,
-        diagnosis,
-        status,
-        priority,
-        opened_at,
-        created_at
-      `,
-      [
-        customerId,
-        motorcycleId,
-        String(complaint).trim(),
-        diagnosis ? String(diagnosis).trim() : null,
-        selectedPriority,
-      ]
-    );
+        ($1,$2,$3,$4,'OPEN',$5)
+      RETURNING *
+    `, [
+      customer_id,
+      motorcycle_id,
+      complaint,
+      diagnosis,
+      priority
+    ]);
 
     res.status(201).json(result.rows[0]);
+
   } catch (error) {
-    console.error(error);
 
     res.status(500).json({
-      error: "خطا در ثبت پرونده تعمیر",
+      error: error instanceof Error ? error.message : "Create case error"
     });
   }
 });
 
-// دریافت یک پرونده
-app.get("/api/cases/:caseId", async (req, res) => {
-  try {
-    const { caseId } = req.params;
+/* =========================
+   SINGLE CASE
+========================= */
 
-    const result = await pool.query(
-      `
+app.get("/api/cases/:caseId", async (req, res) => {
+
+  try {
+
+    const result = await pool.query(`
       SELECT
-        sc.id,
-        sc.customer_id,
-        sc.motorcycle_id,
+        sc.*,
         c.name AS customer_name,
         c.phone AS customer_phone,
+        c.address AS customer_address,
         m.plate,
         m.brand,
         m.model,
         m.year,
         m.color,
         m.vin,
-        m.mileage,
-        sc.complaint,
-        sc.diagnosis,
-        sc.status,
-        sc.priority,
-        sc.opened_at,
-        sc.closed_at,
-        sc.created_at
+        m.mileage
       FROM service_cases sc
       JOIN customers c
         ON c.id = sc.customer_id
       JOIN motorcycles m
         ON m.id = sc.motorcycle_id
       WHERE sc.id = $1
-      `,
-      [caseId]
-    );
+    `, [req.params.caseId]);
 
-    if (result.rowCount === 0) {
+    if (!result.rowCount) {
       return res.status(404).json({
-        error: "پرونده پیدا نشد.",
+        error: "پرونده پیدا نشد"
       });
     }
 
     res.json(result.rows[0]);
+
   } catch (error) {
-    console.error(error);
 
     res.status(500).json({
-      error: "خطا در دریافت پرونده",
+      error: error instanceof Error ? error.message : "Case detail error"
     });
   }
 });
 
-// تغییر وضعیت پرونده
+/* =========================
+   CHANGE CASE STATUS
+========================= */
+
 app.patch("/api/cases/:caseId/status", async (req, res) => {
+
   try {
-    const { caseId } = req.params;
-    const { status } = req.body;
 
-    const allowedStatuses = [
-      "OPEN",
-      "DIAGNOSIS",
-      "WAITING_APPROVAL",
-      "IN_PROGRESS",
-      "WAITING_PARTS",
-      "READY",
-      "COMPLETED",
-      "CLOSED",
-    ];
+    const caseId = req.params.caseId;
 
-    if (!allowedStatuses.includes(status)) {
+    const status =
+      typeof req.body?.status === "string"
+        ? req.body.status.trim().toUpperCase()
+        : "";
+
+    if (!status) {
       return res.status(400).json({
-        error: "وضعیت پرونده نامعتبر است.",
+        error: "وضعیت ارسال نشده است"
       });
     }
 
-    const result = await pool.query(
-      `
-      UPDATE service_cases
-      SET
-        status = $1,
-        closed_at =
-          CASE
-            WHEN $1 IN ('COMPLETED', 'CLOSED')
-            THEN COALESCE(closed_at, now())
-            ELSE NULL
-          END
-      WHERE id = $2
-      RETURNING
-        id,
-        status,
-        closed_at
-      `,
-      [status, caseId]
-    );
+    if (!CASE_STATUSES.includes(status)) {
+      return res.status(400).json({
+        error: "وضعیت پرونده نامعتبر است",
+        allowed: CASE_STATUSES
+      });
+    }
 
-    if (result.rowCount === 0) {
+    const existing =
+      await pool.query(`
+        SELECT id
+        FROM service_cases
+        WHERE id = $1
+      `, [caseId]);
+
+    if (!existing.rowCount) {
       return res.status(404).json({
-        error: "پرونده پیدا نشد.",
+        error: "پرونده پیدا نشد"
       });
     }
 
-    res.json(result.rows[0]);
-  } catch (error) {
-    console.error(error);
+    const result =
+      await pool.query(`
+        UPDATE service_cases
+        SET
+          status = $1,
+          closed_at =
+            CASE
+              WHEN $1 IN ('COMPLETED', 'CLOSED')
+                THEN COALESCE(closed_at, NOW())
+              ELSE NULL
+            END
+        WHERE id = $2
+        RETURNING *
+      `, [
+        status,
+        caseId
+      ]);
 
-    res.status(500).json({
-      error: "خطا در تغییر وضعیت پرونده",
+    return res.json({
+      ok: true,
+      message: "وضعیت پرونده با موفقیت تغییر کرد",
+      case: result.rows[0]
+    });
+
+  } catch (error) {
+
+    console.error("CHANGE CASE STATUS ERROR:", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: error instanceof Error
+        ? error.message
+        : "Change case status error"
     });
   }
 });
 
-// ─────────────────────────────────────────────
-// SERVER
-// ─────────────────────────────────────────────
-
-const PORT = Number(process.env.PORT) || 4000;
+/* =========================
+   SERVER
+========================= */
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`MotoClinic API running on 0.0.0.0:${PORT}`);
+  console.log(
+    `MotoClinic API v0.5.0 running on 0.0.0.0:${PORT}`
+  );
 });
