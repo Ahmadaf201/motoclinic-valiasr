@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { Pool } from "pg";
+import crypto from "crypto";
 
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
@@ -26,12 +27,19 @@ const CASE_STATUSES = [
   "CLOSED",
 ];
 
-const PRIORITIES = [
-  "LOW",
-  "NORMAL",
-  "HIGH",
-  "URGENT",
+const PRIORITIES = ["LOW", "NORMAL", "HIGH", "URGENT"];
+
+const ROLES = [
+  "OWNER",
+  "EXECUTIVE",
+  "TECHNICIAN",
 ];
+
+const ROLE_LABELS: Record<string, string> = {
+  OWNER: "مدیر اصلی",
+  EXECUTIVE: "مدیر اجرایی",
+  TECHNICIAN: "تکنسین",
+};
 
 const STATUS_LABELS: Record<string, string> = {
   OPEN: "باز",
@@ -56,6 +64,227 @@ function normalizePriority(value: unknown) {
   return clean(value || "NORMAL").toUpperCase();
 }
 
+function normalizeRole(value: unknown) {
+  return clean(value).toUpperCase();
+}
+
+/* =========================
+   SECURITY
+========================= */
+
+function hashPassword(password: string, salt?: string) {
+  const actualSalt =
+    salt ||
+    crypto.randomBytes(16).toString("hex");
+
+  const hash = crypto
+    .scryptSync(password, actualSalt, 64)
+    .toString("hex");
+
+  return {
+    hash,
+    salt: actualSalt,
+  };
+}
+
+function verifyPassword(
+  password: string,
+  hash: string,
+  salt: string
+) {
+  const derived = crypto.scryptSync(
+    password,
+    salt,
+    64
+  );
+
+  const stored = Buffer.from(hash, "hex");
+
+  return (
+    stored.length === derived.length &&
+    crypto.timingSafeEqual(stored, derived)
+  );
+}
+
+function createToken() {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+async function getUserFromToken(
+  token: string
+) {
+  if (!token) return null;
+
+  const result = await pool.query(
+    `
+    SELECT
+      u.id,
+      u.username,
+      u.full_name,
+      u.role,
+      u.active
+    FROM sessions s
+    JOIN users u
+      ON u.id = s.user_id
+    WHERE s.token = $1
+      AND s.expires_at > now()
+      AND u.active = true
+    `,
+    [token]
+  );
+
+  return result.rows[0] || null;
+}
+
+async function authUser(
+  req: express.Request
+) {
+  const header =
+    clean(req.headers.authorization);
+
+  if (!header.startsWith("Bearer ")) {
+    return null;
+  }
+
+  const token =
+    header.substring(7).trim();
+
+  return getUserFromToken(token);
+}
+
+function requireRoles(
+  roles: string[]
+) {
+  return async (
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction
+  ) => {
+    try {
+      const user = await authUser(req);
+
+      if (!user) {
+        return res.status(401).json({
+          ok: false,
+          message: "نیاز به ورود به سیستم دارید",
+        });
+      }
+
+      if (!roles.includes(user.role)) {
+        return res.status(403).json({
+          ok: false,
+          message: "شما اجازه انجام این عملیات را ندارید",
+        });
+      }
+
+      (req as any).user = user;
+
+      next();
+    } catch (error) {
+      console.error("AUTH ERROR:", error);
+
+      return res.status(500).json({
+        ok: false,
+        message: "خطا در بررسی دسترسی",
+      });
+    }
+  };
+}
+
+/* =========================
+   AUTH TABLES
+========================= */
+
+async function ensureAuthTables() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      username VARCHAR(100) UNIQUE NOT NULL,
+      full_name VARCHAR(200) NOT NULL,
+      password_hash TEXT NOT NULL,
+      password_salt TEXT NOT NULL,
+      role VARCHAR(30) NOT NULL,
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token TEXT UNIQUE NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_sessions_token
+    ON sessions(token)
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_users_role
+    ON users(role)
+  `);
+
+  /*
+   * اگر ADMIN_USERNAME و ADMIN_PASSWORD
+   * در Environment تنظیم شده باشند،
+   * مدیر اصلی به صورت خودکار ساخته می‌شود.
+   */
+  const adminUsername =
+    clean(process.env.ADMIN_USERNAME);
+
+  const adminPassword =
+    clean(process.env.ADMIN_PASSWORD);
+
+  if (adminUsername && adminPassword) {
+    const existing =
+      await pool.query(
+        `
+        SELECT id
+        FROM users
+        WHERE username = $1
+        `,
+        [adminUsername]
+      );
+
+    if (existing.rowCount === 0) {
+      const { hash, salt } =
+        hashPassword(adminPassword);
+
+      await pool.query(
+        `
+        INSERT INTO users
+          (
+            username,
+            full_name,
+            password_hash,
+            password_salt,
+            role
+          )
+        VALUES
+          ($1,$2,$3,$4,'OWNER')
+        `,
+        [
+          adminUsername,
+          "مدیر اصلی",
+          hash,
+          salt,
+        ]
+      );
+
+      console.log(
+        "[AUTH] Main owner created:",
+        adminUsername
+      );
+    }
+  }
+}
+
 /* =========================
    HEALTH
 ========================= */
@@ -67,8 +296,9 @@ app.get("/api/health", async (_req, res) => {
     res.json({
       ok: true,
       service: "motoclinic-api",
-      version: "0.6.0",
+      version: "0.7.0",
       database: "connected",
+      authentication: "enabled",
     });
   } catch (error) {
     console.error("HEALTH ERROR:", error);
@@ -76,7 +306,7 @@ app.get("/api/health", async (_req, res) => {
     res.status(500).json({
       ok: false,
       service: "motoclinic-api",
-      version: "0.6.0",
+      version: "0.7.0",
       database: "error",
     });
   }
@@ -86,9 +316,468 @@ app.get("/api", (_req, res) => {
   res.json({
     ok: true,
     service: "motoclinic-api",
-    version: "0.6.0",
+    version: "0.7.0",
+    authentication: "enabled",
   });
 });
+
+/* =========================
+   LOGIN
+========================= */
+
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const username =
+      clean(req.body?.username);
+
+    const password =
+      clean(req.body?.password);
+
+    if (!username || !password) {
+      return res.status(400).json({
+        ok: false,
+        message: "نام کاربری و رمز عبور الزامی است",
+      });
+    }
+
+    const result =
+      await pool.query(
+        `
+        SELECT *
+        FROM users
+        WHERE username = $1
+          AND active = true
+        `,
+        [username]
+      );
+
+    if (result.rowCount === 0) {
+      return res.status(401).json({
+        ok: false,
+        message: "نام کاربری یا رمز عبور اشتباه است",
+      });
+    }
+
+    const user = result.rows[0];
+
+    const valid =
+      verifyPassword(
+        password,
+        user.password_hash,
+        user.password_salt
+      );
+
+    if (!valid) {
+      return res.status(401).json({
+        ok: false,
+        message: "نام کاربری یا رمز عبور اشتباه است",
+      });
+    }
+
+    const token = createToken();
+
+    await pool.query(
+      `
+      INSERT INTO sessions
+        (
+          user_id,
+          token,
+          expires_at
+        )
+      VALUES
+        (
+          $1,
+          $2,
+          now() + interval '30 days'
+        )
+      `,
+      [user.id, token]
+    );
+
+    res.json({
+      ok: true,
+      message: "ورود موفق بود",
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        full_name: user.full_name,
+        role: user.role,
+        role_label:
+          ROLE_LABELS[user.role] ||
+          user.role,
+      },
+    });
+  } catch (error) {
+    console.error("LOGIN ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "خطا در ورود به سیستم",
+    });
+  }
+});
+
+/* =========================
+   CURRENT USER
+========================= */
+
+app.get(
+  "/api/auth/me",
+  requireRoles(ROLES),
+  async (req, res) => {
+    res.json({
+      ok: true,
+      user: (req as any).user,
+    });
+  }
+);
+
+/* =========================
+   LOGOUT
+========================= */
+
+app.post(
+  "/api/auth/logout",
+  async (req, res) => {
+    try {
+      const header =
+        clean(req.headers.authorization);
+
+      if (header.startsWith("Bearer ")) {
+        const token =
+          header.substring(7).trim();
+
+        await pool.query(
+          `
+          DELETE FROM sessions
+          WHERE token = $1
+          `,
+          [token]
+        );
+      }
+
+      res.json({
+        ok: true,
+        message: "خروج انجام شد",
+      });
+    } catch (error) {
+      console.error("LOGOUT ERROR:", error);
+
+      res.status(500).json({
+        ok: false,
+        message: "خطا در خروج",
+      });
+    }
+  }
+);
+
+/* =========================
+   USERS
+   OWNER ONLY
+========================= */
+
+app.get(
+  "/api/users",
+  requireRoles(["OWNER"]),
+  async (_req, res) => {
+    try {
+      const result = await pool.query(`
+        SELECT
+          id,
+          username,
+          full_name,
+          role,
+          active,
+          created_at,
+          updated_at
+        FROM users
+        ORDER BY created_at DESC
+      `);
+
+      res.json({
+        ok: true,
+        users: result.rows,
+      });
+    } catch (error) {
+      console.error(error);
+
+      res.status(500).json({
+        ok: false,
+        message: "خطا در دریافت کاربران",
+      });
+    }
+  }
+);
+
+app.post(
+  "/api/users",
+  requireRoles(["OWNER"]),
+  async (req, res) => {
+    try {
+      const username =
+        clean(req.body?.username);
+
+      const fullName =
+        clean(req.body?.full_name) ||
+        clean(req.body?.fullName);
+
+      const password =
+        clean(req.body?.password);
+
+      const role =
+        normalizeRole(req.body?.role);
+
+      if (
+        !username ||
+        !fullName ||
+        !password ||
+        !role
+      ) {
+        return res.status(400).json({
+          ok: false,
+          message:
+            "نام کاربری، نام کامل، رمز عبور و نقش الزامی است",
+        });
+      }
+
+      if (!ROLES.includes(role)) {
+        return res.status(400).json({
+          ok: false,
+          message: "نقش کاربر معتبر نیست",
+        });
+      }
+
+      if (password.length < 6) {
+        return res.status(400).json({
+          ok: false,
+          message:
+            "رمز عبور باید حداقل ۶ کاراکتر باشد",
+        });
+      }
+
+      const duplicate =
+        await pool.query(
+          `
+          SELECT id
+          FROM users
+          WHERE username = $1
+          `,
+          [username]
+        );
+
+      if (duplicate.rowCount > 0) {
+        return res.status(409).json({
+          ok: false,
+          message: "این نام کاربری قبلاً ثبت شده است",
+        });
+      }
+
+      const { hash, salt } =
+        hashPassword(password);
+
+      const result =
+        await pool.query(
+          `
+          INSERT INTO users
+            (
+              username,
+              full_name,
+              password_hash,
+              password_salt,
+              role
+            )
+          VALUES
+            ($1,$2,$3,$4,$5)
+          RETURNING
+            id,
+            username,
+            full_name,
+            role,
+            active,
+            created_at
+          `,
+          [
+            username,
+            fullName,
+            hash,
+            salt,
+            role,
+          ]
+        );
+
+      res.status(201).json({
+        ok: true,
+        message: "کاربر با موفقیت ایجاد شد",
+        user: result.rows[0],
+      });
+    } catch (error) {
+      console.error("CREATE USER ERROR:", error);
+
+      res.status(500).json({
+        ok: false,
+        message: "خطا در ایجاد کاربر",
+      });
+    }
+  }
+);
+
+app.patch(
+  "/api/users/:userId",
+  requireRoles(["OWNER"]),
+  async (req, res) => {
+    try {
+      const userId =
+        clean(req.params.userId);
+
+      const fullName =
+        clean(req.body?.full_name) ||
+        clean(req.body?.fullName);
+
+      const role =
+        normalizeRole(req.body?.role);
+
+      const active =
+        req.body?.active;
+
+      if (
+        role &&
+        !ROLES.includes(role)
+      ) {
+        return res.status(400).json({
+          ok: false,
+          message: "نقش کاربر معتبر نیست",
+        });
+      }
+
+      const result =
+        await pool.query(
+          `
+          UPDATE users
+          SET
+            full_name =
+              COALESCE(NULLIF($1,''), full_name),
+            role =
+              COALESCE(NULLIF($2,''), role),
+            active =
+              COALESCE($3, active),
+            updated_at = now()
+          WHERE id = $4
+          RETURNING
+            id,
+            username,
+            full_name,
+            role,
+            active,
+            updated_at
+          `,
+          [
+            fullName,
+            role,
+            typeof active === "boolean"
+              ? active
+              : null,
+            userId,
+          ]
+        );
+
+      if (result.rowCount === 0) {
+        return res.status(404).json({
+          ok: false,
+          message: "کاربر پیدا نشد",
+        });
+      }
+
+      res.json({
+        ok: true,
+        message: "کاربر به‌روزرسانی شد",
+        user: result.rows[0],
+      });
+    } catch (error) {
+      console.error("UPDATE USER ERROR:", error);
+
+      res.status(500).json({
+        ok: false,
+        message: "خطا در ویرایش کاربر",
+      });
+    }
+  }
+);
+
+app.post(
+  "/api/users/:userId/password",
+  requireRoles(["OWNER"]),
+  async (req, res) => {
+    try {
+      const userId =
+        clean(req.params.userId);
+
+      const password =
+        clean(req.body?.password);
+
+      if (password.length < 6) {
+        return res.status(400).json({
+          ok: false,
+          message:
+            "رمز عبور باید حداقل ۶ کاراکتر باشد",
+        });
+      }
+
+      const { hash, salt } =
+        hashPassword(password);
+
+      const result =
+        await pool.query(
+          `
+          UPDATE users
+          SET
+            password_hash = $1,
+            password_salt = $2,
+            updated_at = now()
+          WHERE id = $3
+          RETURNING id
+          `,
+          [
+            hash,
+            salt,
+            userId,
+          ]
+        );
+
+      if (result.rowCount === 0) {
+        return res.status(404).json({
+          ok: false,
+          message: "کاربر پیدا نشد",
+        });
+      }
+
+      await pool.query(
+        `
+        DELETE FROM sessions
+        WHERE user_id = $1
+        `,
+        [userId]
+      );
+
+      res.json({
+        ok: true,
+        message:
+          "رمز عبور با موفقیت تغییر کرد",
+      });
+    } catch (error) {
+      console.error(
+        "PASSWORD ERROR:",
+        error
+      );
+
+      res.status(500).json({
+        ok: false,
+        message:
+          "خطا در تغییر رمز عبور",
+      });
+    }
+  }
+);
 
 /* =========================
    DASHBOARD
@@ -116,10 +805,16 @@ app.get("/api/dashboard", async (_req, res) => {
     `);
 
     res.json({
-      customers: customers.rows[0].count,
-      motorcycles: motorcycles.rows[0].count,
-      activeCases: activeCases.rows[0].count,
-      revenue: Number(revenue.rows[0].total || 0),
+      customers:
+        customers.rows[0].count,
+      motorcycles:
+        motorcycles.rows[0].count,
+      activeCases:
+        activeCases.rows[0].count,
+      revenue:
+        Number(
+          revenue.rows[0].total || 0
+        ),
     });
   } catch (error) {
     console.error(error);
@@ -381,13 +1076,11 @@ app.post("/api/cases", async (req, res) => {
       req.body?.motorcycle_id ||
       req.body?.motorcycleId;
 
-    const complaint = clean(
-      req.body?.complaint
-    );
+    const complaint =
+      clean(req.body?.complaint);
 
-    const diagnosis = clean(
-      req.body?.diagnosis
-    );
+    const diagnosis =
+      clean(req.body?.diagnosis);
 
     const status =
       normalizeStatus(
@@ -487,55 +1180,58 @@ app.post("/api/cases", async (req, res) => {
   }
 });
 
-app.get("/api/cases/:caseId", async (req, res) => {
-  try {
-    const result = await pool.query(
-      `
-      SELECT
-        sc.*,
-        c.name AS customer_name,
-        c.phone AS customer_phone,
-        c.address AS customer_address,
-        m.plate AS motorcycle_plate,
-        m.brand AS motorcycle_brand,
-        m.model AS motorcycle_model,
-        m.year AS motorcycle_year,
-        m.color AS motorcycle_color,
-        m.mileage AS motorcycle_mileage
-      FROM service_cases sc
-      JOIN customers c
-        ON c.id = sc.customer_id
-      JOIN motorcycles m
-        ON m.id = sc.motorcycle_id
-      WHERE sc.id = $1
-      `,
-      [req.params.caseId]
-    );
+app.get(
+  "/api/cases/:caseId",
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          SELECT
+            sc.*,
+            c.name AS customer_name,
+            c.phone AS customer_phone,
+            c.address AS customer_address,
+            m.plate AS motorcycle_plate,
+            m.brand AS motorcycle_brand,
+            m.model AS motorcycle_model,
+            m.year AS motorcycle_year,
+            m.color AS motorcycle_color,
+            m.mileage AS motorcycle_mileage
+          FROM service_cases sc
+          JOIN customers c
+            ON c.id = sc.customer_id
+          JOIN motorcycles m
+            ON m.id = sc.motorcycle_id
+          WHERE sc.id = $1
+          `,
+          [req.params.caseId]
+        );
 
-    if (result.rowCount === 0) {
-      return res.status(404).json({
+      if (result.rowCount === 0) {
+        return res.status(404).json({
+          ok: false,
+          message: "پرونده پیدا نشد",
+        });
+      }
+
+      res.json({
+        ok: true,
+        case: result.rows[0],
+      });
+    } catch (error) {
+      console.error(error);
+
+      res.status(500).json({
         ok: false,
-        message: "پرونده پیدا نشد",
+        message: "خطا در دریافت پرونده",
       });
     }
-
-    res.json({
-      ok: true,
-      case: result.rows[0],
-    });
-  } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      ok: false,
-      message: "خطا در دریافت پرونده",
-    });
   }
-});
+);
 
 /* =========================
    CHANGE CASE STATUS
-   POST + PATCH
 ========================= */
 
 async function changeCaseStatus(
@@ -543,20 +1239,13 @@ async function changeCaseStatus(
   res: express.Response
 ) {
   try {
-    const caseId = clean(
-      req.params.caseId
-    );
+    const caseId =
+      clean(req.params.caseId);
 
     const status =
       normalizeStatus(
         req.body?.status
       );
-
-    console.log(
-      "[STATUS]",
-      caseId,
-      status
-    );
 
     if (!caseId) {
       return res.status(400).json({
@@ -576,7 +1265,7 @@ async function changeCaseStatus(
     const existing =
       await pool.query(
         `
-        SELECT id, status
+        SELECT id
         FROM service_cases
         WHERE id = $1
         `,
@@ -616,12 +1305,6 @@ async function changeCaseStatus(
         ]
       );
 
-    console.log(
-      "[STATUS UPDATED]",
-      result.rows[0].id,
-      result.rows[0].status
-    );
-
     return res.json({
       ok: true,
       message:
@@ -653,15 +1336,35 @@ app.patch(
 );
 
 /* =========================
-   SERVER
+   STARTUP
 ========================= */
 
-app.listen(
-  PORT,
-  "0.0.0.0",
-  () => {
+async function start() {
+  try {
+    await pool.query("SELECT 1");
+    await ensureAuthTables();
+
     console.log(
-      `MotoClinic API running on 0.0.0.0:${PORT}`
+      "MotoClinic database/auth ready"
     );
+
+    app.listen(
+      PORT,
+      "0.0.0.0",
+      () => {
+        console.log(
+          `MotoClinic API running on 0.0.0.0:${PORT}`
+        );
+      }
+    );
+  } catch (error) {
+    console.error(
+      "STARTUP ERROR:",
+      error
+    );
+
+    process.exit(1);
   }
-);
+}
+
+start();
