@@ -2,906 +2,924 @@ const API_URL = "https://motoclinic-api.onrender.com/api";
 
 const app = document.getElementById("app");
 
-const buttonStyle = `
-  display:inline-block;
-  margin-top:10px;
-  padding:10px 14px;
-  border:none;
-  border-radius:8px;
-  background:#222;
-  color:#fff;
-  cursor:pointer;
-  font-size:14px;
-`;
+let customers = [];
+let motorcycles = [];
+let cases = [];
 
-const inputStyle = `
-  width:100%;
-  box-sizing:border-box;
-  padding:11px;
-  margin:6px 0 10px;
-  border:1px solid #ccc;
-  border-radius:8px;
-  font-size:15px;
-`;
+const statusLabels = {
+  OPEN: "باز",
+  DIAGNOSIS: "در حال عیب‌یابی",
+  WAITING_APPROVAL: "در انتظار تأیید",
+  IN_PROGRESS: "در حال تعمیر",
+  WAITING_PARTS: "در انتظار قطعه",
+  READY: "آماده تحویل",
+  COMPLETED: "تکمیل شده",
+  CLOSED: "بسته شده",
+};
 
-function showMessage(message, error = false) {
-  const box = document.createElement("div");
-
-  box.style.cssText = `
-    margin:15px 0;
-    padding:12px;
-    border-radius:8px;
-    background:${error ? "#ffe5e5" : "#e7f7e7"};
-    color:${error ? "#a00000" : "#176b17"};
-    font-weight:bold;
-  `;
-
-  box.textContent = message;
-
-  app.prepend(box);
-
-  setTimeout(() => box.remove(), 5000);
-}
-
-function statusText(status) {
-  const map = {
-    OPEN: "باز",
-    DIAGNOSIS: "در حال عیب‌یابی",
-    WAITING_APPROVAL: "در انتظار تأیید",
-    IN_PROGRESS: "در حال تعمیر",
-    WAITING_PARTS: "در انتظار قطعه",
-    READY: "آماده تحویل",
-    COMPLETED: "تکمیل شده",
-    CLOSED: "بسته شده"
-  };
-
-  return map[status] || status;
-}
-
-function priorityText(priority) {
-  const map = {
-    LOW: "کم",
-    NORMAL: "عادی",
-    HIGH: "زیاد",
-    URGENT: "فوری"
-  };
-
-  return map[priority] || priority;
-}
+const priorityLabels = {
+  LOW: "کم",
+  NORMAL: "عادی",
+  HIGH: "بالا",
+  URGENT: "فوری",
+};
 
 async function api(path, options = {}) {
-
   const separator = path.includes("?") ? "&" : "?";
 
   const response = await fetch(
-    `${API_URL}${path}${separator}_v=6`,
+    `${API_URL}${path}${separator}_v=7`,
     {
       ...options,
       cache: "no-store",
       headers: {
         "Content-Type": "application/json",
-        ...(options.headers || {})
-      }
+        ...(options.headers || {}),
+      },
     }
   );
-
-  const text = await response.text();
 
   let data = {};
 
   try {
-    data = text ? JSON.parse(text) : {};
+    data = await response.json();
   } catch {
-    data = {
-      error: text || "پاسخ نامعتبر از سرور"
-    };
+    data = {};
   }
 
   if (!response.ok) {
     throw new Error(
-      data.error ||
       data.message ||
-      `خطای سرور (${response.status})`
+      `خطای سرور: ${response.status}`
     );
   }
 
   return data;
 }
 
-/* =========================
-   DASHBOARD
-========================= */
+function showMessage(message, type = "success") {
+  const old = document.getElementById("app-message");
+
+  if (old) {
+    old.remove();
+  }
+
+  const box = document.createElement("div");
+
+  box.id = "app-message";
+  box.style.cssText = `
+    position:fixed;
+    top:20px;
+    left:50%;
+    transform:translateX(-50%);
+    z-index:9999;
+    padding:14px 22px;
+    border-radius:12px;
+    font-family:Tahoma,Arial,sans-serif;
+    font-size:14px;
+    box-shadow:0 5px 20px rgba(0,0,0,.2);
+    direction:rtl;
+    max-width:90%;
+    text-align:center;
+    background:${type === "error" ? "#b91c1c" : "#15803d"};
+    color:white;
+  `;
+
+  box.textContent = message;
+
+  document.body.appendChild(box);
+
+  setTimeout(() => {
+    box.remove();
+  }, 3500);
+}
+
+function formatMoney(value) {
+  return Number(value || 0).toLocaleString("fa-IR");
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
 
 async function loadDashboard() {
-
   try {
-
     const data = await api("/dashboard");
 
-    app.innerHTML = `
-      <div style="
-        font-family:Tahoma,Arial,sans-serif;
-        max-width:1000px;
-        margin:auto;
-        padding:20px;
-        direction:rtl;
-      ">
+    document.getElementById("customers-count").textContent =
+      data.customers ?? 0;
 
-        <h1>
-          🏍️ موتو کلینیک ولیعصر (عج)
-        </h1>
+    document.getElementById("motorcycles-count").textContent =
+      data.motorcycles ?? 0;
 
-        <p style="color:#666;">
-          سیستم هوشمند مدیریت تعمیرگاه موتورسیکلت
-        </p>
+    document.getElementById("cases-count").textContent =
+      data.activeCases ?? 0;
 
-        <div style="
-          display:grid;
-          grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
-          gap:12px;
-          margin:20px 0;
-        ">
-
-          <div style="padding:18px;border-radius:12px;background:#f5f5f5;text-align:center;">
-            <div style="font-size:28px;">👤</div>
-            <div>مشتریان</div>
-            <strong style="font-size:24px;">
-              ${data.customers}
-            </strong>
-          </div>
-
-          <div style="padding:18px;border-radius:12px;background:#f5f5f5;text-align:center;">
-            <div style="font-size:28px;">🏍️</div>
-            <div>موتورسیکلت‌ها</div>
-            <strong style="font-size:24px;">
-              ${data.motorcycles}
-            </strong>
-          </div>
-
-          <div style="padding:18px;border-radius:12px;background:#f5f5f5;text-align:center;">
-            <div style="font-size:28px;">🔧</div>
-            <div>پرونده‌های فعال</div>
-            <strong style="font-size:24px;">
-              ${data.activeCases}
-            </strong>
-          </div>
-
-          <div style="padding:18px;border-radius:12px;background:#f5f5f5;text-align:center;">
-            <div style="font-size:28px;">💰</div>
-            <div>دریافتی</div>
-            <strong style="font-size:24px;">
-              ${Number(data.revenue || 0).toLocaleString("fa-IR")}
-            </strong>
-            <span> تومان</span>
-          </div>
-
-        </div>
-
-        <h2>دسترسی سریع</h2>
-
-        <div style="
-          display:flex;
-          flex-wrap:wrap;
-          gap:10px;
-          margin-bottom:20px;
-        ">
-
-          <button onclick="showCustomerForm()" style="${buttonStyle}">
-            ➕ ثبت مشتری
-          </button>
-
-          <button onclick="showMotorcycleForm()" style="${buttonStyle}">
-            🏍️ ثبت موتورسیکلت
-          </button>
-
-          <button onclick="showCaseForm()" style="${buttonStyle}">
-            🔧 پذیرش تعمیرگاه
-          </button>
-
-        </div>
-
-        <div id="forms"></div>
-
-        <h2>پرونده‌های تعمیر</h2>
-
-        <div id="cases">
-          در حال دریافت اطلاعات...
-        </div>
-
-        <h2>وضعیت سیستم</h2>
-
-        <div style="
-          padding:12px;
-          background:#e7f7e7;
-          border-radius:8px;
-          color:#176b17;
-          font-weight:bold;
-        ">
-          🟢 اتصال به سیستم برقرار است
-        </div>
-
-      </div>
-    `;
-
-    await loadCases();
-
+    document.getElementById("revenue-count").textContent =
+      formatMoney(data.revenue) + " تومان";
   } catch (error) {
-
-    app.innerHTML = `
-      <div style="
-        font-family:Tahoma,Arial,sans-serif;
-        direction:rtl;
-        text-align:center;
-        padding:50px 20px;
-      ">
-
-        <h2>❌ خطا در اتصال به سیستم</h2>
-
-        <p>${error.message}</p>
-
-        <button onclick="loadDashboard()" style="${buttonStyle}">
-          🔄 تلاش مجدد
-        </button>
-
-      </div>
-    `;
+    console.error(error);
   }
 }
 
-/* =========================
-   CASE LIST
-========================= */
+async function loadCustomers() {
+  customers = await api("/customers");
+  renderCustomers();
+}
+
+async function loadMotorcycles() {
+  motorcycles = await api("/motorcycles");
+  renderMotorcycles();
+}
 
 async function loadCases() {
-
-  const container = document.getElementById("cases");
-
-  if (!container) return;
-
-  try {
-
-    const cases = await api("/cases");
-
-    if (!cases.length) {
-
-      container.innerHTML = `
-        <div style="
-          padding:20px;
-          background:#f5f5f5;
-          border-radius:10px;
-        ">
-          هنوز پرونده‌ای ثبت نشده است.
-        </div>
-      `;
-
-      return;
-    }
-
-    container.innerHTML = cases.map(item => `
-      <div style="
-        background:#fff;
-        border:1px solid #ddd;
-        border-radius:12px;
-        padding:16px;
-        margin-bottom:12px;
-      ">
-
-        <div style="font-weight:bold;font-size:17px;">
-          👤 ${item.customer_name || "بدون نام"}
-        </div>
-
-        <div style="margin-top:8px;">
-          🏍️ ${item.brand || ""} ${item.model || ""}
-          — پلاک: ${item.plate || "-"}
-        </div>
-
-        <div style="margin-top:8px;">
-          🔧 ${item.complaint || "-"}
-        </div>
-
-        <div style="margin-top:8px;">
-          وضعیت:
-          <strong>${statusText(item.status)}</strong>
-
-          &nbsp;
-
-          اولویت:
-          <strong>${priorityText(item.priority)}</strong>
-        </div>
-
-        <button
-          onclick="openCase('${item.id}')"
-          style="${buttonStyle}"
-        >
-          📋 مشاهده پرونده
-        </button>
-
-      </div>
-    `).join("");
-
-  } catch (error) {
-
-    container.innerHTML = `
-      <div style="
-        padding:15px;
-        background:#ffe5e5;
-        color:#a00000;
-        border-radius:8px;
-      ">
-        ❌ خطا در دریافت پرونده‌ها:
-        ${error.message}
-      </div>
-    `;
-  }
+  cases = await api("/cases");
+  renderCases();
 }
 
-/* =========================
-   CUSTOMER
-========================= */
+function renderCustomers() {
+  const box = document.getElementById("customers-list");
 
-function showCustomerForm() {
+  if (!box) return;
 
-  const forms = document.getElementById("forms");
+  if (!customers.length) {
+    box.innerHTML = "هنوز مشتری ثبت نشده است.";
+    return;
+  }
 
-  forms.innerHTML = `
-    <div style="
-      padding:18px;
-      background:#f7f7f7;
-      border-radius:12px;
-      margin-bottom:20px;
-    ">
+  box.innerHTML = customers
+    .map(
+      (customer) => `
+        <div class="list-item">
+          <strong>${escapeHtml(customer.name)}</strong>
+          <div>📞 ${escapeHtml(customer.phone)}</div>
+          ${
+            customer.address
+              ? `<div>📍 ${escapeHtml(customer.address)}</div>`
+              : ""
+          }
+        </div>
+      `
+    )
+    .join("");
+}
 
-      <h3>➕ ثبت مشتری جدید</h3>
+function renderMotorcycles() {
+  const box = document.getElementById(
+    "motorcycles-list"
+  );
 
-      <input id="customerName"
-        placeholder="نام و نام خانوادگی"
-        style="${inputStyle}">
+  if (!box) return;
 
-      <input id="customerPhone"
-        placeholder="شماره تماس"
-        style="${inputStyle}">
+  if (!motorcycles.length) {
+    box.innerHTML =
+      "هنوز موتورسیکلتی ثبت نشده است.";
+    return;
+  }
 
-      <input id="customerAddress"
-        placeholder="آدرس"
-        style="${inputStyle}">
+  box.innerHTML = motorcycles
+    .map(
+      (motorcycle) => `
+        <div class="list-item">
+          <strong>
+            ${escapeHtml(
+              motorcycle.brand || ""
+            )}
+            ${escapeHtml(
+              motorcycle.model || ""
+            )}
+          </strong>
+          <div>
+            🏍️ پلاک:
+            ${escapeHtml(motorcycle.plate)}
+          </div>
+          <div>
+            👤 مالک:
+            ${escapeHtml(
+              motorcycle.customer_name || ""
+            )}
+          </div>
+        </div>
+      `
+    )
+    .join("");
+}
 
-      <textarea
-        id="customerNotes"
-        placeholder="یادداشت"
-        style="${inputStyle};min-height:80px;"
-      ></textarea>
+function renderCases() {
+  const box = document.getElementById("cases-list");
 
-      <button onclick="saveCustomer()" style="${buttonStyle}">
-        💾 ذخیره مشتری
-      </button>
+  if (!box) return;
 
-      <button
-        onclick="closeForms()"
-        style="${buttonStyle};background:#777;"
+  if (!cases.length) {
+    box.innerHTML =
+      "هنوز پرونده‌ای ثبت نشده است.";
+    return;
+  }
+
+  box.innerHTML = cases
+    .map(
+      (item) => `
+        <div class="list-item">
+          <strong>
+            👤 ${escapeHtml(
+              item.customer_name
+            )}
+          </strong>
+
+          <div>
+            🏍️
+            ${escapeHtml(
+              item.motorcycle_brand || ""
+            )}
+            ${escapeHtml(
+              item.motorcycle_model || ""
+            )}
+            — پلاک:
+            ${escapeHtml(
+              item.motorcycle_plate
+            )}
+          </div>
+
+          <div>
+            🔧 ${escapeHtml(
+              item.complaint
+            )}
+          </div>
+
+          <div>
+            وضعیت:
+            ${escapeHtml(
+              statusLabels[item.status] ||
+              item.status
+            )}
+
+            &nbsp;
+
+            اولویت:
+            ${escapeHtml(
+              priorityLabels[item.priority] ||
+              item.priority
+            )}
+          </div>
+
+          <button
+            type="button"
+            onclick="showCaseDetail('${item.id}')"
+          >
+            📋 مشاهده پرونده
+          </button>
+        </div>
+      `
+    )
+    .join("");
+}
+
+function renderApp() {
+  app.innerHTML = `
+    <div
+      style="
+        max-width:1100px;
+        margin:auto;
+        padding:20px;
+        font-family:Tahoma,Arial,sans-serif;
+        direction:rtl;
+      "
+    >
+
+      <h1>
+        🏍️ موتو کلینیک ولیعصر(عج)
+      </h1>
+
+      <p>
+        سیستم مدیریت هوشمند تعمیرگاه
+      </p>
+
+      <hr>
+
+      <h2>📊 داشبورد</h2>
+
+      <div
+        style="
+          display:grid;
+          grid-template-columns:
+            repeat(auto-fit,minmax(180px,1fr));
+          gap:12px;
+        "
       >
-        بستن
-      </button>
 
-    </div>
-  `;
-}
+        <div class="dashboard-card">
+          <strong>👤 مشتریان</strong>
+          <div id="customers-count">0</div>
+        </div>
 
-async function saveCustomer() {
+        <div class="dashboard-card">
+          <strong>🏍️ موتورسیکلت‌ها</strong>
+          <div id="motorcycles-count">0</div>
+        </div>
 
-  const name =
-    document.getElementById("customerName").value.trim();
+        <div class="dashboard-card">
+          <strong>🔧 پرونده‌های فعال</strong>
+          <div id="cases-count">0</div>
+        </div>
 
-  const phone =
-    document.getElementById("customerPhone").value.trim();
-
-  const address =
-    document.getElementById("customerAddress").value.trim();
-
-  const notes =
-    document.getElementById("customerNotes").value.trim();
-
-  if (!name || !phone) {
-
-    showMessage(
-      "نام و شماره تماس الزامی است.",
-      true
-    );
-
-    return;
-  }
-
-  try {
-
-    await api("/customers", {
-      method: "POST",
-      body: JSON.stringify({
-        name,
-        phone,
-        address,
-        notes
-      })
-    });
-
-    await loadDashboard();
-
-    showMessage(
-      "✅ مشتری با موفقیت ثبت شد."
-    );
-
-  } catch (error) {
-
-    showMessage(
-      "❌ خطا در ثبت مشتری: " + error.message,
-      true
-    );
-  }
-}
-
-/* =========================
-   MOTORCYCLE
-========================= */
-
-async function showMotorcycleForm() {
-
-  try {
-
-    const customers = await api("/customers");
-
-    const forms = document.getElementById("forms");
-
-    forms.innerHTML = `
-      <div style="
-        padding:18px;
-        background:#f7f7f7;
-        border-radius:12px;
-        margin-bottom:20px;
-      ">
-
-        <h3>🏍️ ثبت موتورسیکلت</h3>
-
-        <select
-          id="motorCustomer"
-          style="${inputStyle}"
-        >
-
-          <option value="">
-            انتخاب مشتری
-          </option>
-
-          ${customers.map(c => `
-            <option value="${c.id}">
-              ${c.name} — ${c.phone}
-            </option>
-          `).join("")}
-
-        </select>
-
-        <input
-          id="motorPlate"
-          placeholder="پلاک"
-          style="${inputStyle}"
-        >
-
-        <input
-          id="motorBrand"
-          placeholder="برند"
-          style="${inputStyle}"
-        >
-
-        <input
-          id="motorModel"
-          placeholder="مدل"
-          style="${inputStyle}"
-        >
-
-        <input
-          id="motorYear"
-          placeholder="سال"
-          type="number"
-          style="${inputStyle}"
-        >
-
-        <input
-          id="motorColor"
-          placeholder="رنگ"
-          style="${inputStyle}"
-        >
-
-        <input
-          id="motorVin"
-          placeholder="VIN / شماره شاسی"
-          style="${inputStyle}"
-        >
-
-        <input
-          id="motorMileage"
-          placeholder="کارکرد"
-          type="number"
-          value="0"
-          style="${inputStyle}"
-        >
-
-        <button
-          onclick="saveMotorcycle()"
-          style="${buttonStyle}"
-        >
-          💾 ذخیره موتورسیکلت
-        </button>
-
-        <button
-          onclick="closeForms()"
-          style="${buttonStyle};background:#777;"
-        >
-          بستن
-        </button>
+        <div class="dashboard-card">
+          <strong>💰 درآمد</strong>
+          <div id="revenue-count">0 تومان</div>
+        </div>
 
       </div>
-    `;
 
-  } catch (error) {
+      <hr>
 
-    showMessage(
-      "❌ خطا در دریافت مشتریان: " + error.message,
-      true
-    );
-  }
-}
+      <h2>👤 ثبت مشتری</h2>
 
-async function saveMotorcycle() {
+      <form id="customer-form">
 
-  const customer_id =
-    document.getElementById("motorCustomer").value;
-
-  const plate =
-    document.getElementById("motorPlate").value.trim();
-
-  const brand =
-    document.getElementById("motorBrand").value.trim();
-
-  const model =
-    document.getElementById("motorModel").value.trim();
-
-  const yearValue =
-    document.getElementById("motorYear").value;
-
-  const color =
-    document.getElementById("motorColor").value.trim();
-
-  const vin =
-    document.getElementById("motorVin").value.trim();
-
-  const mileageValue =
-    document.getElementById("motorMileage").value;
-
-  if (!customer_id || !plate) {
-
-    showMessage(
-      "انتخاب مشتری و وارد کردن پلاک الزامی است.",
-      true
-    );
-
-    return;
-  }
-
-  try {
-
-    await api("/motorcycles", {
-      method: "POST",
-      body: JSON.stringify({
-        customer_id,
-        plate,
-        brand,
-        model,
-        year: yearValue ? Number(yearValue) : null,
-        color,
-        vin,
-        mileage: mileageValue
-          ? Number(mileageValue)
-          : 0
-      })
-    });
-
-    await loadDashboard();
-
-    showMessage(
-      "✅ موتورسیکلت با موفقیت ثبت شد."
-    );
-
-  } catch (error) {
-
-    showMessage(
-      "❌ خطا در ثبت موتورسیکلت: " + error.message,
-      true
-    );
-  }
-}
-
-/* =========================
-   CASE FORM
-========================= */
-
-async function showCaseForm() {
-
-  try {
-
-    const customers = await api("/customers");
-
-    const forms = document.getElementById("forms");
-
-    forms.innerHTML = `
-      <div style="
-        padding:18px;
-        background:#f7f7f7;
-        border-radius:12px;
-        margin-bottom:20px;
-      ">
-
-        <h3>🔧 پذیرش تعمیرگاه</h3>
-
-        <label>مشتری</label>
-
-        <select
-          id="caseCustomer"
-          onchange="loadCustomerMotorcycles()"
-          style="${inputStyle}"
+        <input
+          id="customer-name"
+          placeholder="نام و نام خانوادگی"
+          required
         >
 
+        <input
+          id="customer-phone"
+          placeholder="شماره تماس"
+          required
+        >
+
+        <input
+          id="customer-address"
+          placeholder="آدرس"
+        >
+
+        <textarea
+          id="customer-notes"
+          placeholder="یادداشت"
+        ></textarea>
+
+        <button type="submit">
+          💾 ثبت مشتری
+        </button>
+
+      </form>
+
+      <div id="customers-list"></div>
+
+      <hr>
+
+      <h2>🏍️ ثبت موتورسیکلت</h2>
+
+      <form id="motorcycle-form">
+
+        <select
+          id="motorcycle-customer"
+          required
+        >
           <option value="">
             انتخاب مشتری
           </option>
-
-          ${customers.map(c => `
-            <option value="${c.id}">
-              ${c.name} — ${c.phone}
-            </option>
-          `).join("")}
-
         </select>
 
-        <label>موتورسیکلت</label>
-
-        <select
-          id="caseMotorcycle"
-          style="${inputStyle}"
+        <input
+          id="motorcycle-plate"
+          placeholder="پلاک"
+          required
         >
 
+        <input
+          id="motorcycle-brand"
+          placeholder="برند"
+        >
+
+        <input
+          id="motorcycle-model"
+          placeholder="مدل"
+        >
+
+        <input
+          id="motorcycle-year"
+          type="number"
+          placeholder="سال"
+        >
+
+        <input
+          id="motorcycle-color"
+          placeholder="رنگ"
+        >
+
+        <input
+          id="motorcycle-mileage"
+          type="number"
+          placeholder="کارکرد"
+        >
+
+        <button type="submit">
+          💾 ثبت موتورسیکلت
+        </button>
+
+      </form>
+
+      <div id="motorcycles-list"></div>
+
+      <hr>
+
+      <h2>🔧 ایجاد پرونده تعمیر</h2>
+
+      <form id="case-form">
+
+        <select
+          id="case-customer"
+          required
+        >
+          <option value="">
+            انتخاب مشتری
+          </option>
+        </select>
+
+        <select
+          id="case-motorcycle"
+          required
+        >
           <option value="">
             ابتدا مشتری را انتخاب کنید
           </option>
-
         </select>
 
         <textarea
-          id="caseComplaint"
-          placeholder="شرح مشکل / درخواست مشتری"
-          style="${inputStyle};min-height:100px;"
+          id="case-complaint"
+          placeholder="شرح مشکل مشتری"
+          required
         ></textarea>
 
         <textarea
-          id="caseDiagnosis"
+          id="case-diagnosis"
           placeholder="تشخیص اولیه"
-          style="${inputStyle};min-height:80px;"
         ></textarea>
 
-        <select
-          id="casePriority"
-          style="${inputStyle}"
-        >
-
-          <option value="NORMAL">
-            اولویت عادی
+        <select id="case-priority">
+          <option value="LOW">کم</option>
+          <option value="NORMAL" selected>
+            عادی
           </option>
-
-          <option value="LOW">
-            اولویت کم
-          </option>
-
-          <option value="HIGH">
-            اولویت زیاد
-          </option>
-
-          <option value="URGENT">
-            فوری
-          </option>
-
+          <option value="HIGH">بالا</option>
+          <option value="URGENT">فوری</option>
         </select>
 
-        <button
-          onclick="saveCase()"
-          style="${buttonStyle}"
-        >
-          💾 ثبت پرونده
+        <button type="submit">
+          💾 ایجاد پرونده
         </button>
 
-        <button
-          onclick="closeForms()"
-          style="${buttonStyle};background:#777;"
-        >
-          بستن
-        </button>
+      </form>
 
-      </div>
-    `;
+      <div id="cases-list"></div>
 
-  } catch (error) {
+      <hr>
+
+      <div id="case-detail"></div>
+
+    </div>
+  `;
+
+  document
+    .getElementById("customer-form")
+    .addEventListener(
+      "submit",
+      saveCustomer
+    );
+
+  document
+    .getElementById("motorcycle-form")
+    .addEventListener(
+      "submit",
+      saveMotorcycle
+    );
+
+  document
+    .getElementById("case-form")
+    .addEventListener(
+      "submit",
+      saveCase
+    );
+
+  document
+    .getElementById("case-customer")
+    .addEventListener(
+      "change",
+      loadCustomerMotorcyclesForCase
+    );
+}
+
+async function saveCustomer(event) {
+  event.preventDefault();
+
+  try {
+    const name =
+      document.getElementById(
+        "customer-name"
+      ).value.trim();
+
+    const phone =
+      document.getElementById(
+        "customer-phone"
+      ).value.trim();
+
+    const address =
+      document.getElementById(
+        "customer-address"
+      ).value.trim();
+
+    const notes =
+      document.getElementById(
+        "customer-notes"
+      ).value.trim();
+
+    const result = await api(
+      "/customers",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name,
+          phone,
+          address,
+          notes,
+        }),
+      }
+    );
 
     showMessage(
-      "❌ خطا در دریافت اطلاعات: " + error.message,
-      true
+      result.message ||
+      "مشتری ثبت شد"
+    );
+
+    document
+      .getElementById("customer-form")
+      .reset();
+
+    await loadCustomers();
+    await loadDashboard();
+
+    fillCustomerSelects();
+  } catch (error) {
+    console.error(error);
+
+    showMessage(
+      error.message ||
+      "خطا در ثبت مشتری",
+      "error"
     );
   }
 }
 
-async function loadCustomerMotorcycles() {
+function fillCustomerSelects() {
+  const motorcycleCustomer =
+    document.getElementById(
+      "motorcycle-customer"
+    );
 
+  const caseCustomer =
+    document.getElementById(
+      "case-customer"
+    );
+
+  const options = `
+    <option value="">
+      انتخاب مشتری
+    </option>
+
+    ${customers
+      .map(
+        (customer) => `
+          <option value="${customer.id}">
+            ${escapeHtml(customer.name)}
+            — ${escapeHtml(customer.phone)}
+          </option>
+        `
+      )
+      .join("")}
+  `;
+
+  if (motorcycleCustomer) {
+    motorcycleCustomer.innerHTML =
+      options;
+  }
+
+  if (caseCustomer) {
+    caseCustomer.innerHTML =
+      options;
+  }
+}
+
+async function saveMotorcycle(event) {
+  event.preventDefault();
+
+  try {
+    const customerId =
+      document.getElementById(
+        "motorcycle-customer"
+      ).value;
+
+    const plate =
+      document.getElementById(
+        "motorcycle-plate"
+      ).value.trim();
+
+    const brand =
+      document.getElementById(
+        "motorcycle-brand"
+      ).value.trim();
+
+    const model =
+      document.getElementById(
+        "motorcycle-model"
+      ).value.trim();
+
+    const year =
+      document.getElementById(
+        "motorcycle-year"
+      ).value;
+
+    const color =
+      document.getElementById(
+        "motorcycle-color"
+      ).value.trim();
+
+    const mileage =
+      document.getElementById(
+        "motorcycle-mileage"
+      ).value;
+
+    const result = await api(
+      "/motorcycles",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          customer_id: customerId,
+          plate,
+          brand,
+          model,
+          year: year
+            ? Number(year)
+            : null,
+          color,
+          mileage: mileage
+            ? Number(mileage)
+            : 0,
+        }),
+      }
+    );
+
+    showMessage(
+      result.message ||
+      "موتورسیکلت ثبت شد"
+    );
+
+    document
+      .getElementById("motorcycle-form")
+      .reset();
+
+    await loadMotorcycles();
+    await loadDashboard();
+
+    fillCustomerSelects();
+  } catch (error) {
+    console.error(error);
+
+    showMessage(
+      error.message ||
+      "خطا در ثبت موتورسیکلت",
+      "error"
+    );
+  }
+}
+
+async function loadCustomerMotorcyclesForCase() {
   const customerId =
-    document.getElementById("caseCustomer").value;
+    document.getElementById(
+      "case-customer"
+    ).value;
 
   const select =
-    document.getElementById("caseMotorcycle");
+    document.getElementById(
+      "case-motorcycle"
+    );
 
   if (!customerId) {
-
     select.innerHTML = `
       <option value="">
         ابتدا مشتری را انتخاب کنید
       </option>
     `;
-
     return;
   }
 
   try {
+    const data = await api(
+      `/customers/${customerId}/motorcycles`
+    );
 
-    const motorcycles =
-      await api(`/motorcycles/customer/${customerId}`);
-
-    if (!motorcycles.length) {
-
+    if (!data.length) {
       select.innerHTML = `
         <option value="">
-          برای این مشتری موتورسیکلتی ثبت نشده
+          برای این مشتری موتورسیکلت ثبت نشده
         </option>
       `;
-
       return;
     }
 
-    select.innerHTML = motorcycles.map(m => `
-      <option value="${m.id}">
-        ${m.brand || ""}
-        ${m.model || ""}
-        — پلاک ${m.plate}
+    select.innerHTML = `
+      <option value="">
+        انتخاب موتورسیکلت
       </option>
-    `).join("");
 
+      ${data
+        .map(
+          (motorcycle) => `
+            <option value="${motorcycle.id}">
+              ${escapeHtml(
+                motorcycle.brand || ""
+              )}
+              ${escapeHtml(
+                motorcycle.model || ""
+              )}
+              — پلاک:
+              ${escapeHtml(
+                motorcycle.plate
+              )}
+            </option>
+          `
+        )
+        .join("")}
+    `;
   } catch (error) {
+    console.error(error);
 
     showMessage(
-      "❌ خطا در دریافت موتورسیکلت‌ها: " + error.message,
-      true
+      error.message ||
+      "خطا در دریافت موتورسیکلت‌ها",
+      "error"
     );
   }
 }
 
-async function saveCase() {
-
-  const customer_id =
-    document.getElementById("caseCustomer").value;
-
-  const motorcycle_id =
-    document.getElementById("caseMotorcycle").value;
-
-  const complaint =
-    document.getElementById("caseComplaint").value.trim();
-
-  const diagnosis =
-    document.getElementById("caseDiagnosis").value.trim();
-
-  const priority =
-    document.getElementById("casePriority").value;
-
-  if (!customer_id || !motorcycle_id || !complaint) {
-
-    showMessage(
-      "مشتری، موتورسیکلت و شرح مشکل الزامی هستند.",
-      true
-    );
-
-    return;
-  }
+async function saveCase(event) {
+  event.preventDefault();
 
   try {
+    const customerId =
+      document.getElementById(
+        "case-customer"
+      ).value;
 
-    await api("/cases", {
-      method: "POST",
-      body: JSON.stringify({
-        customer_id,
-        motorcycle_id,
-        complaint,
-        diagnosis,
-        priority
-      })
-    });
+    const motorcycleId =
+      document.getElementById(
+        "case-motorcycle"
+      ).value;
 
+    const complaint =
+      document.getElementById(
+        "case-complaint"
+      ).value.trim();
+
+    const diagnosis =
+      document.getElementById(
+        "case-diagnosis"
+      ).value.trim();
+
+    const priority =
+      document.getElementById(
+        "case-priority"
+      ).value;
+
+    const result = await api(
+      "/cases",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          customer_id: customerId,
+          motorcycle_id: motorcycleId,
+          complaint,
+          diagnosis,
+          priority,
+        }),
+      }
+    );
+
+    showMessage(
+      result.message ||
+      "پرونده ایجاد شد"
+    );
+
+    document
+      .getElementById("case-form")
+      .reset();
+
+    document.getElementById(
+      "case-motorcycle"
+    ).innerHTML = `
+      <option value="">
+        ابتدا مشتری را انتخاب کنید
+      </option>
+    `;
+
+    await loadCases();
     await loadDashboard();
-
-    showMessage(
-      "✅ پرونده تعمیر با موفقیت ثبت شد."
-    );
-
   } catch (error) {
+    console.error(error);
 
     showMessage(
-      "❌ خطا در ثبت پرونده: " + error.message,
-      true
+      error.message ||
+      "خطا در ایجاد پرونده",
+      "error"
     );
   }
 }
 
-/* =========================
-   CASE DETAIL
-========================= */
+async function showCaseDetail(caseId) {
+  const box =
+    document.getElementById(
+      "case-detail"
+    );
 
-async function openCase(caseId) {
+  box.innerHTML = `
+    <h2>📋 پرونده</h2>
+    <p>در حال دریافت اطلاعات...</p>
+  `;
 
   try {
-
-    const item =
+    const result =
       await api(`/cases/${caseId}`);
 
-    const forms =
-      document.getElementById("forms");
+    const item = result.case;
 
-    forms.innerHTML = `
-      <div style="
-        padding:20px;
-        background:#f7f7f7;
-        border-radius:12px;
-        margin-bottom:20px;
-      ">
+    box.innerHTML = `
+      <div class="case-detail-card">
 
         <h2>📋 جزئیات پرونده</h2>
 
         <p>
-          👤
-          <strong>
-            ${item.customer_name || "-"}
-          </strong>
+          <strong>مشتری:</strong>
+          ${escapeHtml(
+            item.customer_name
+          )}
         </p>
 
         <p>
-          🏍️
-          ${item.brand || ""}
-          ${item.model || ""}
-          — پلاک:
-          ${item.plate || "-"}
+          <strong>تلفن:</strong>
+          ${escapeHtml(
+            item.customer_phone
+          )}
         </p>
 
         <p>
-          🔧
-          <strong>شرح مشکل:</strong>
-          ${item.complaint || "-"}
+          <strong>موتورسیکلت:</strong>
+          ${escapeHtml(
+            item.motorcycle_brand || ""
+          )}
+          ${escapeHtml(
+            item.motorcycle_model || ""
+          )}
         </p>
 
         <p>
-          🩺
-          <strong>تشخیص:</strong>
-          ${item.diagnosis || "ثبت نشده"}
+          <strong>پلاک:</strong>
+          ${escapeHtml(
+            item.motorcycle_plate
+          )}
         </p>
 
         <p>
-          اولویت:
-          <strong>
-            ${priorityText(item.priority)}
-          </strong>
+          <strong>مشکل:</strong>
+          ${escapeHtml(
+            item.complaint
+          )}
         </p>
 
+        ${
+          item.diagnosis
+            ? `
+              <p>
+                <strong>تشخیص:</strong>
+                ${escapeHtml(
+                  item.diagnosis
+                )}
+              </p>
+            `
+            : ""
+        }
+
         <p>
-          وضعیت فعلی:
-          <strong>
-            ${statusText(item.status)}
-          </strong>
+          <strong>وضعیت فعلی:</strong>
+          <span id="current-status">
+            ${escapeHtml(
+              statusLabels[item.status] ||
+              item.status
+            )}
+          </span>
         </p>
 
         <hr>
@@ -911,187 +929,173 @@ async function openCase(caseId) {
         </label>
 
         <select
-          id="caseStatus"
-          style="${inputStyle}"
+          id="case-status-select"
         >
-
-          <option value="OPEN"
-            ${item.status === "OPEN" ? "selected" : ""}>
-            باز
-          </option>
-
-          <option value="DIAGNOSIS"
-            ${item.status === "DIAGNOSIS" ? "selected" : ""}>
-            در حال عیب‌یابی
-          </option>
-
-          <option value="WAITING_APPROVAL"
-            ${item.status === "WAITING_APPROVAL" ? "selected" : ""}>
-            در انتظار تأیید
-          </option>
-
-          <option value="IN_PROGRESS"
-            ${item.status === "IN_PROGRESS" ? "selected" : ""}>
-            در حال تعمیر
-          </option>
-
-          <option value="WAITING_PARTS"
-            ${item.status === "WAITING_PARTS" ? "selected" : ""}>
-            در انتظار قطعه
-          </option>
-
-          <option value="READY"
-            ${item.status === "READY" ? "selected" : ""}>
-            آماده تحویل
-          </option>
-
-          <option value="COMPLETED"
-            ${item.status === "COMPLETED" ? "selected" : ""}>
-            تکمیل شده
-          </option>
-
-          <option value="CLOSED"
-            ${item.status === "CLOSED" ? "selected" : ""}>
-            بسته شده
-          </option>
-
+          ${Object.entries(
+            statusLabels
+          )
+            .map(
+              ([value, label]) => `
+                <option
+                  value="${value}"
+                  ${
+                    item.status === value
+                      ? "selected"
+                      : ""
+                  }
+                >
+                  ${label}
+                </option>
+              `
+            )
+            .join("")}
         </select>
 
         <button
-          id="saveStatusButton"
-          onclick="changeCaseStatus('${caseId}')"
-          style="${buttonStyle}"
+          type="button"
+          id="save-status-button"
+          onclick="changeCaseStatus('${item.id}')"
         >
           💾 ذخیره وضعیت
         </button>
 
-        <button
-          onclick="closeForms()"
-          style="${buttonStyle};background:#777;"
-        >
-          بستن
-        </button>
+        <div
+          id="status-result"
+          style="
+            margin-top:10px;
+            font-weight:bold;
+          "
+        ></div>
 
       </div>
     `;
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth"
-    });
-
   } catch (error) {
+    console.error(error);
 
-    showMessage(
-      "❌ خطا در دریافت پرونده: " + error.message,
-      true
-    );
+    box.innerHTML = `
+      <div>
+        خطا در دریافت پرونده:
+        ${escapeHtml(error.message)}
+      </div>
+    `;
   }
 }
-
-/* =========================
-   CHANGE STATUS
-========================= */
 
 async function changeCaseStatus(caseId) {
-
   const select =
-    document.getElementById("caseStatus");
+    document.getElementById(
+      "case-status-select"
+    );
 
   const button =
-    document.getElementById("saveStatusButton");
+    document.getElementById(
+      "save-status-button"
+    );
+
+  const resultBox =
+    document.getElementById(
+      "status-result"
+    );
 
   if (!select) {
-
     showMessage(
-      "❌ کنترل وضعیت پرونده پیدا نشد.",
-      true
+      "انتخاب وضعیت پیدا نشد",
+      "error"
     );
-
     return;
   }
 
-  const status =
-    select.value.trim().toUpperCase();
+  const status = select.value;
 
-  if (!status) {
+  button.disabled = true;
 
-    showMessage(
-      "❌ وضعیت پرونده انتخاب نشده است.",
-      true
-    );
-
-    return;
-  }
+  resultBox.textContent =
+    "⏳ در حال ذخیره وضعیت...";
 
   try {
-
-    if (button) {
-      button.disabled = true;
-      button.textContent = "⏳ در حال ذخیره...";
-    }
-
     const result =
-      await api(`/cases/${caseId}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          status
-        })
-      });
+      await api(
+        `/cases/${caseId}/status`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            status,
+          }),
+        }
+      );
 
-    if (
-      !result ||
-      result.ok !== true ||
-      !result.case
-    ) {
+    if (!result.ok) {
       throw new Error(
-        "سرور پاسخ معتبر برای تغییر وضعیت برنگرداند."
+        result.message ||
+        "ذخیره وضعیت انجام نشد"
       );
     }
 
-    if (result.case.status !== status) {
-      throw new Error(
-        "سرور وضعیت جدید را تأیید نکرد."
+    resultBox.textContent =
+      `✅ ${
+        result.message ||
+        "وضعیت با موفقیت ذخیره شد"
+      }`;
+
+    const currentStatus =
+      document.getElementById(
+        "current-status"
       );
+
+    if (currentStatus) {
+      currentStatus.textContent =
+        statusLabels[status] ||
+        status;
     }
 
+    showMessage(
+      result.message ||
+      "وضعیت پرونده ذخیره شد"
+    );
+
+    await loadCases();
+    await loadDashboard();
+  } catch (error) {
+    console.error(error);
+
+    resultBox.textContent =
+      `❌ ${error.message}`;
+
+    showMessage(
+      error.message ||
+      "خطا در ذخیره وضعیت",
+      "error"
+    );
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function init() {
+  renderApp();
+
+  try {
+    await loadCustomers();
+    await loadMotorcycles();
+    await loadCases();
     await loadDashboard();
 
-    showMessage(
-      `✅ وضعیت پرونده به «${statusText(status)}» تغییر کرد.`
-    );
-
+    fillCustomerSelects();
   } catch (error) {
-
-    if (button) {
-      button.disabled = false;
-      button.textContent = "💾 ذخیره وضعیت";
-    }
+    console.error(error);
 
     showMessage(
-      "❌ خطا در تغییر وضعیت پرونده: " +
-      error.message,
-      true
+      error.message ||
+      "خطا در اتصال به سرور",
+      "error"
     );
   }
 }
 
-/* =========================
-   CLOSE FORMS
-========================= */
+window.showCaseDetail =
+  showCaseDetail;
 
-function closeForms() {
+window.changeCaseStatus =
+  changeCaseStatus;
 
-  const forms =
-    document.getElementById("forms");
-
-  if (forms) {
-    forms.innerHTML = "";
-  }
-}
-
-/* =========================
-   START
-========================= */
-
-loadDashboard();
+init();
