@@ -15,6 +15,10 @@ const pool = new Pool({
       : false,
 });
 
+// ─────────────────────────────────────────────
+// HEALTH
+// ─────────────────────────────────────────────
+
 app.get("/api/health", async (_req, res) => {
   try {
     await pool.query("SELECT 1");
@@ -22,7 +26,7 @@ app.get("/api/health", async (_req, res) => {
     res.json({
       ok: true,
       service: "motoclinic-api",
-      version: "0.2.0",
+      version: "0.3.0",
       database: "connected",
     });
   } catch (error) {
@@ -36,12 +40,21 @@ app.get("/api/health", async (_req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────
+// API INFO
+// ─────────────────────────────────────────────
+
 app.get("/api", (_req, res) => {
   res.json({
     name: "موتو کلینیک ولیعصر(عج)",
     message: "سیستم مدیریت هوشمند تعمیرگاه موتورسیکلت",
+    version: "0.3.0",
   });
 });
+
+// ─────────────────────────────────────────────
+// DASHBOARD
+// ─────────────────────────────────────────────
 
 app.get("/api/dashboard", async (_req, res) => {
   try {
@@ -79,10 +92,21 @@ app.get("/api/dashboard", async (_req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────
+// CUSTOMERS
+// ─────────────────────────────────────────────
+
+// دریافت لیست مشتریان
 app.get("/api/customers", async (_req, res) => {
   try {
     const result = await pool.query(`
-      SELECT id, name, phone, address, notes, created_at
+      SELECT
+        id,
+        name,
+        phone,
+        address,
+        notes,
+        created_at
       FROM customers
       ORDER BY created_at DESC
     `);
@@ -97,6 +121,7 @@ app.get("/api/customers", async (_req, res) => {
   }
 });
 
+// ثبت مشتری
 app.post("/api/customers", async (req, res) => {
   try {
     const { name, phone, address, notes } = req.body;
@@ -113,7 +138,13 @@ app.post("/api/customers", async (req, res) => {
         (name, phone, address, notes)
       VALUES
         ($1, $2, $3, $4)
-      RETURNING id, name, phone, address, notes, created_at
+      RETURNING
+        id,
+        name,
+        phone,
+        address,
+        notes,
+        created_at
       `,
       [
         String(name).trim(),
@@ -132,6 +163,173 @@ app.post("/api/customers", async (req, res) => {
     });
   }
 });
+
+// ─────────────────────────────────────────────
+// MOTORCYCLES
+// ─────────────────────────────────────────────
+
+// دریافت موتورسیکلت‌ها
+app.get("/api/motorcycles", async (_req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        m.id,
+        m.customer_id,
+        c.name AS customer_name,
+        c.phone AS customer_phone,
+        m.plate,
+        m.brand,
+        m.model,
+        m.year,
+        m.color,
+        m.vin,
+        m.mileage,
+        m.created_at
+      FROM motorcycles m
+      JOIN customers c
+        ON c.id = m.customer_id
+      ORDER BY m.created_at DESC
+    `);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      error: "خطا در دریافت موتورسیکلت‌ها",
+    });
+  }
+});
+
+// دریافت موتورسیکلت‌های یک مشتری
+app.get("/api/customers/:customerId/motorcycles", async (req, res) => {
+  try {
+    const { customerId } = req.params;
+
+    const result = await pool.query(
+      `
+      SELECT
+        id,
+        customer_id,
+        plate,
+        brand,
+        model,
+        year,
+        color,
+        vin,
+        mileage,
+        created_at
+      FROM motorcycles
+      WHERE customer_id = $1
+      ORDER BY created_at DESC
+      `,
+      [customerId]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      error: "خطا در دریافت موتورسیکلت‌های مشتری",
+    });
+  }
+});
+
+// ثبت موتورسیکلت
+app.post("/api/motorcycles", async (req, res) => {
+  try {
+    const {
+      customerId,
+      plate,
+      brand,
+      model,
+      year,
+      color,
+      vin,
+      mileage,
+    } = req.body;
+
+    if (!customerId) {
+      return res.status(400).json({
+        error: "انتخاب مشتری الزامی است.",
+      });
+    }
+
+    if (!plate || !String(plate).trim()) {
+      return res.status(400).json({
+        error: "شماره پلاک الزامی است.",
+      });
+    }
+
+    // بررسی وجود مشتری
+    const customer = await pool.query(
+      `
+      SELECT id
+      FROM customers
+      WHERE id = $1
+      `,
+      [customerId]
+    );
+
+    if (customer.rowCount === 0) {
+      return res.status(404).json({
+        error: "مشتری پیدا نشد.",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      INSERT INTO motorcycles
+        (
+          customer_id,
+          plate,
+          brand,
+          model,
+          year,
+          color,
+          vin,
+          mileage
+        )
+      VALUES
+        ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING
+        id,
+        customer_id,
+        plate,
+        brand,
+        model,
+        year,
+        color,
+        vin,
+        mileage,
+        created_at
+      `,
+      [
+        customerId,
+        String(plate).trim(),
+        brand ? String(brand).trim() : null,
+        model ? String(model).trim() : null,
+        year ? Number(year) : null,
+        color ? String(color).trim() : null,
+        vin ? String(vin).trim() : null,
+        mileage ? Number(mileage) : 0,
+      ]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      error: "خطا در ثبت موتورسیکلت",
+    });
+  }
+});
+
+// ─────────────────────────────────────────────
+// SERVER
+// ─────────────────────────────────────────────
 
 const PORT = Number(process.env.PORT) || 4000;
 
