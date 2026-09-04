@@ -1,1082 +1,269 @@
-const API_URL = "https://motoclinic-api.onrender.com/api?v=2";
+const API_URL = "https://motoclinic-api.onrender.com/api";
 
 const app = document.getElementById("app");
 
 const buttonStyle = `
-  padding:14px 18px;
+  display:inline-block;
+  margin-top:10px;
+  padding:10px 14px;
   border:none;
-  border-radius:12px;
+  border-radius:8px;
   background:#222;
-  color:white;
-  font-size:15px;
+  color:#fff;
   cursor:pointer;
-  font-family:Tahoma,Arial,sans-serif;
+  font-size:14px;
 `;
 
 const inputStyle = `
   width:100%;
-  padding:14px;
-  margin:8px 0;
-  border-radius:10px;
-  border:1px solid #ddd;
   box-sizing:border-box;
-  font-family:Tahoma,Arial,sans-serif;
+  padding:11px;
+  margin:6px 0 10px;
+  border:1px solid #ccc;
+  border-radius:8px;
+  font-size:15px;
 `;
 
+function showMessage(message, error = false) {
+  const box = document.createElement("div");
+
+  box.style.cssText = `
+    margin:15px 0;
+    padding:12px;
+    border-radius:8px;
+    background:${error ? "#ffe5e5" : "#e7f7e7"};
+    color:${error ? "#a00000" : "#176b17"};
+    font-weight:bold;
+  `;
+
+  box.textContent = message;
+
+  app.prepend(box);
+
+  setTimeout(() => box.remove(), 4000);
+}
+
+function statusText(status) {
+  const map = {
+    OPEN: "باز",
+    DIAGNOSIS: "در حال عیب‌یابی",
+    WAITING_APPROVAL: "در انتظار تأیید",
+    IN_PROGRESS: "در حال تعمیر",
+    WAITING_PARTS: "در انتظار قطعه",
+    READY: "آماده تحویل",
+    COMPLETED: "تکمیل شده",
+    CLOSED: "بسته شده"
+  };
+
+  return map[status] || status;
+}
+
+function priorityText(priority) {
+  const map = {
+    LOW: "کم",
+    NORMAL: "عادی",
+    HIGH: "زیاد",
+    URGENT: "فوری"
+  };
+
+  return map[priority] || priority;
+}
+
+async function api(path, options = {}) {
+  const response = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    }
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(data.error || data.message || "خطای سرور");
+  }
+
+  return data;
+}
+
 async function loadDashboard() {
-  app.innerHTML = `
-    <div dir="rtl" style="
-      font-family:Tahoma,Arial,sans-serif;
-      max-width:1100px;
-      margin:auto;
-      padding:20px;
-    ">
+  try {
+    const data = await api("/dashboard");
 
-      <h1>🏍️ موتو کلینیک ولیعصر (عج)</h1>
-
-      <p style="color:#666">
-        سیستم هوشمند مدیریت تعمیرگاه موتورسیکلت
-      </p>
-
+    app.innerHTML = `
       <div style="
-        display:grid;
-        grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
-        gap:15px;
-        margin-top:25px;
+        font-family:Tahoma,Arial,sans-serif;
+        max-width:1000px;
+        margin:auto;
+        padding:20px;
+        direction:rtl;
       ">
 
-        <div style="padding:20px;border-radius:15px;background:#fff;">
-          👤
-          <h3>مشتریان</h3>
-          <strong id="customers">...</strong>
+        <h1 style="margin-bottom:5px;">
+          🏍️ موتو کلینیک ولیعصر (عج)
+        </h1>
+
+        <p style="color:#666;margin-top:0;">
+          سیستم هوشمند مدیریت تعمیرگاه موتورسیکلت
+        </p>
+
+        <div style="
+          display:grid;
+          grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+          gap:12px;
+          margin:20px 0;
+        ">
+
+          <div style="padding:18px;border-radius:12px;background:#f5f5f5;text-align:center;">
+            <div style="font-size:28px;">👤</div>
+            <div>مشتریان</div>
+            <strong style="font-size:24px;">${data.customers}</strong>
+          </div>
+
+          <div style="padding:18px;border-radius:12px;background:#f5f5f5;text-align:center;">
+            <div style="font-size:28px;">🏍️</div>
+            <div>موتورسیکلت‌ها</div>
+            <strong style="font-size:24px;">${data.motorcycles}</strong>
+          </div>
+
+          <div style="padding:18px;border-radius:12px;background:#f5f5f5;text-align:center;">
+            <div style="font-size:28px;">🔧</div>
+            <div>پرونده‌های فعال</div>
+            <strong style="font-size:24px;">${data.activeCases}</strong>
+          </div>
+
+          <div style="padding:18px;border-radius:12px;background:#f5f5f5;text-align:center;">
+            <div style="font-size:28px;">💰</div>
+            <div>دریافتی</div>
+            <strong style="font-size:24px;">
+              ${Number(data.revenue || 0).toLocaleString("fa-IR")}
+            </strong>
+            <span> تومان</span>
+          </div>
+
         </div>
 
-        <div style="padding:20px;border-radius:15px;background:#fff;">
-          🏍️
-          <h3>موتورسیکلت‌ها</h3>
-          <strong id="motorcycles">...</strong>
+        <h2>دسترسی سریع</h2>
+
+        <div style="
+          display:flex;
+          flex-wrap:wrap;
+          gap:10px;
+          margin-bottom:20px;
+        ">
+
+          <button onclick="showCustomerForm()" style="${buttonStyle}">
+            ➕ ثبت مشتری
+          </button>
+
+          <button onclick="showMotorcycleForm()" style="${buttonStyle}">
+            🏍️ ثبت موتورسیکلت
+          </button>
+
+          <button onclick="showCaseForm()" style="${buttonStyle}">
+            🔧 پذیرش تعمیرگاه
+          </button>
+
         </div>
 
-        <div style="padding:20px;border-radius:15px;background:#fff;">
-          🔧
-          <h3>پرونده‌های فعال</h3>
-          <strong id="cases">...</strong>
-        </div>
+        <div id="forms"></div>
 
-        <div style="padding:20px;border-radius:15px;background:#fff;">
-          💰
-          <h3>دریافتی</h3>
-          <strong id="income">...</strong>
-          <span> تومان</span>
-        </div>
+        <h2>پرونده‌های تعمیر</h2>
 
-      </div>
-
-      <h2 style="margin-top:35px;">دسترسی سریع</h2>
-
-      <div style="
-        display:grid;
-        grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
-        gap:12px;
-      ">
-
-        <button onclick="newCustomer()" style="${buttonStyle}">
-          ➕ ثبت مشتری
-        </button>
-
-        <button onclick="newMotorcycle()" style="${buttonStyle}">
-          🏍️ ثبت موتورسیکلت
-        </button>
-
-        <button onclick="newCase()" style="${buttonStyle}">
-          🔧 پذیرش تعمیرگاه
-        </button>
-
-      </div>
-
-      <div id="message" style="margin-top:25px;"></div>
-
-      <div style="
-        margin-top:30px;
-        padding:18px;
-        border-radius:15px;
-        background:#fff;
-      ">
-
-        <h3>پرونده‌های تعمیر</h3>
-
-        <div id="caseList">
+        <div id="cases">
           در حال دریافت اطلاعات...
         </div>
 
-      </div>
+        <h2>وضعیت سیستم</h2>
 
-      <div style="
-        margin-top:20px;
-        padding:18px;
-        border-radius:15px;
-        background:#fff;
-      ">
-
-        <h3>وضعیت سیستم</h3>
-
-        <p id="apiStatus">
-          در حال اتصال...
-        </p>
+        <div style="
+          padding:12px;
+          background:#e7f7e7;
+          border-radius:8px;
+          color:#176b17;
+          font-weight:bold;
+        ">
+          🟢 اتصال به سیستم برقرار است
+        </div>
 
       </div>
-
-    </div>
-  `;
-
-  try {
-    const response = await fetch(`${API_URL}/dashboard`);
-
-    if (!response.ok) {
-      throw new Error("API error");
-    }
-
-    const data = await response.json();
-
-    document.getElementById("customers").textContent =
-      Number(data.customers).toLocaleString("fa-IR");
-
-    document.getElementById("motorcycles").textContent =
-      Number(data.motorcycles).toLocaleString("fa-IR");
-
-    document.getElementById("cases").textContent =
-      Number(data.activeCases).toLocaleString("fa-IR");
-
-    document.getElementById("income").textContent =
-      Number(data.revenue).toLocaleString("fa-IR");
-
-    document.getElementById("apiStatus").innerHTML =
-      "🟢 اتصال به سیستم برقرار است";
+    `;
 
     await loadCases();
 
   } catch (error) {
 
-    document.getElementById("apiStatus").innerHTML =
-      "🔴 خطا در اتصال به API";
+    app.innerHTML = `
+      <div style="
+        font-family:Tahoma,Arial,sans-serif;
+        direction:rtl;
+        text-align:center;
+        padding:50px 20px;
+      ">
+        <h2>❌ خطا در اتصال به سیستم</h2>
+        <p>${error.message}</p>
 
-  }
-}
-
-function showMessage(text) {
-
-  const message =
-    document.getElementById("message");
-
-  if (!message) return;
-
-  message.innerHTML = `
-    <div style="
-      padding:15px;
-      background:#fff8df;
-      border-radius:12px;
-      border:1px solid #eadb9a;
-    ">
-      ${text}
-    </div>
-  `;
-}
-
-
-// ========================
-// CUSTOMER
-// ========================
-
-function newCustomer() {
-
-  document.getElementById("message").innerHTML = `
-
-    <div style="
-      padding:20px;
-      background:#fff;
-      border-radius:15px;
-      margin-top:20px;
-    ">
-
-      <h2>👤 ثبت مشتری جدید</h2>
-
-      <input
-        id="customerName"
-        placeholder="نام و نام خانوادگی *"
-        style="${inputStyle}"
-      >
-
-      <input
-        id="customerPhone"
-        placeholder="شماره موبایل"
-        type="tel"
-        style="${inputStyle}"
-      >
-
-      <input
-        id="customerAddress"
-        placeholder="آدرس"
-        style="${inputStyle}"
-      >
-
-      <textarea
-        id="customerNotes"
-        placeholder="توضیحات"
-        style="${inputStyle}height:100px;"
-      ></textarea>
-
-      <button
-        onclick="saveCustomer()"
-        style="${buttonStyle}"
-      >
-        💾 ذخیره مشتری
-      </button>
-
-    </div>
-
-  `;
-}
-
-async function saveCustomer() {
-
-  const name =
-    document.getElementById("customerName").value.trim();
-
-  const phone =
-    document.getElementById("customerPhone").value.trim();
-
-  const address =
-    document.getElementById("customerAddress").value.trim();
-
-  const notes =
-    document.getElementById("customerNotes").value.trim();
-
-  if (!name) {
-
-    showMessage(
-      "⚠️ نام مشتری را وارد کنید."
-    );
-
-    return;
-  }
-
-  try {
-
-    const response =
-      await fetch(`${API_URL}/customers`, {
-
-        method: "POST",
-
-        headers: {
-          "Content-Type": "application/json"
-        },
-
-        body: JSON.stringify({
-          name,
-          phone,
-          address,
-          notes
-        })
-
-      });
-
-    const data =
-      await response.json();
-
-    if (!response.ok) {
-
-      throw new Error(
-        data.error || "خطا در ثبت مشتری"
-      );
-
-    }
-
-    await loadDashboard();
-
-    showMessage(
-      "✅ مشتری با موفقیت ثبت شد."
-    );
-
-  } catch (error) {
-
-    showMessage(
-      `❌ ${error.message}`
-    );
-
-  }
-}
-
-
-// ========================
-// MOTORCYCLE
-// ========================
-
-async function newMotorcycle() {
-
-  const message =
-    document.getElementById("message");
-
-  message.innerHTML = `
-
-    <div style="
-      padding:20px;
-      background:#fff;
-      border-radius:15px;
-      margin-top:20px;
-    ">
-
-      <h2>🏍️ ثبت موتورسیکلت جدید</h2>
-
-      <p style="color:#666;">
-        ابتدا مالک موتورسیکلت را انتخاب کنید.
-      </p>
-
-      <div id="motorcycleFormStatus">
-        در حال دریافت لیست مشتریان...
+        <button onclick="loadDashboard()" style="${buttonStyle}">
+          🔄 تلاش مجدد
+        </button>
       </div>
-
-    </div>
-
-  `;
-
-  try {
-
-    const response =
-      await fetch(`${API_URL}/customers`);
-
-    if (!response.ok) {
-
-      throw new Error(
-        "خطا در دریافت مشتریان"
-      );
-
-    }
-
-    const customers =
-      await response.json();
-
-    if (!customers.length) {
-
-      message.innerHTML = `
-
-        <div style="
-          padding:20px;
-          background:#fff;
-          border-radius:15px;
-        ">
-
-          <h2>🏍️ ثبت موتورسیکلت</h2>
-
-          <p>
-            هنوز مشتری ثبت نشده است.
-          </p>
-
-          <button
-            onclick="newCustomer()"
-            style="${buttonStyle}"
-          >
-            ➕ ابتدا ثبت مشتری
-          </button>
-
-        </div>
-
-      `;
-
-      return;
-    }
-
-    document.getElementById(
-      "motorcycleFormStatus"
-    ).innerHTML = `
-
-      <select
-        id="motorcycleCustomer"
-        style="${inputStyle}"
-      >
-
-        <option value="">
-          انتخاب مالک *
-        </option>
-
-        ${customers.map(customer => `
-
-          <option value="${customer.id}">
-            ${customer.name}
-            ${customer.phone
-              ? ` - ${customer.phone}`
-              : ""}
-          </option>
-
-        `).join("")}
-
-      </select>
-
-      <input
-        id="motorcyclePlate"
-        placeholder="شماره پلاک *"
-        style="${inputStyle}"
-      >
-
-      <input
-        id="motorcycleBrand"
-        placeholder="برند موتور؛ مثال: Honda"
-        style="${inputStyle}"
-      >
-
-      <input
-        id="motorcycleModel"
-        placeholder="مدل؛ مثال: CG 125"
-        style="${inputStyle}"
-      >
-
-      <input
-        id="motorcycleYear"
-        placeholder="سال ساخت"
-        type="number"
-        style="${inputStyle}"
-      >
-
-      <input
-        id="motorcycleColor"
-        placeholder="رنگ"
-        style="${inputStyle}"
-      >
-
-      <input
-        id="motorcycleVin"
-        placeholder="شماره شاسی / VIN"
-        style="${inputStyle}"
-      >
-
-      <input
-        id="motorcycleMileage"
-        placeholder="کارکرد کیلومتر"
-        type="number"
-        min="0"
-        value="0"
-        style="${inputStyle}"
-      >
-
-      <button
-        onclick="saveMotorcycle()"
-        style="${buttonStyle}"
-      >
-        💾 ذخیره موتورسیکلت
-      </button>
-
     `;
-
-  } catch (error) {
-
-    showMessage(
-      `❌ ${error.message}`
-    );
-
   }
 }
-
-async function saveMotorcycle() {
-
-  const customerId =
-    document.getElementById(
-      "motorcycleCustomer"
-    ).value;
-
-  const plate =
-    document.getElementById(
-      "motorcyclePlate"
-    ).value.trim();
-
-  const brand =
-    document.getElementById(
-      "motorcycleBrand"
-    ).value.trim();
-
-  const model =
-    document.getElementById(
-      "motorcycleModel"
-    ).value.trim();
-
-  const year =
-    document.getElementById(
-      "motorcycleYear"
-    ).value.trim();
-
-  const color =
-    document.getElementById(
-      "motorcycleColor"
-    ).value.trim();
-
-  const vin =
-    document.getElementById(
-      "motorcycleVin"
-    ).value.trim();
-
-  const mileage =
-    document.getElementById(
-      "motorcycleMileage"
-    ).value.trim();
-
-  if (!customerId) {
-
-    showMessage(
-      "⚠️ مالک موتورسیکلت را انتخاب کنید."
-    );
-
-    return;
-  }
-
-  if (!plate) {
-
-    showMessage(
-      "⚠️ شماره پلاک را وارد کنید."
-    );
-
-    return;
-  }
-
-  try {
-
-    const response =
-      await fetch(`${API_URL}/motorcycles`, {
-
-        method: "POST",
-
-        headers: {
-          "Content-Type": "application/json"
-        },
-
-        body: JSON.stringify({
-
-          customerId,
-          plate,
-          brand,
-          model,
-
-          year:
-            year
-              ? Number(year)
-              : null,
-
-          color,
-          vin,
-
-          mileage:
-            mileage
-              ? Number(mileage)
-              : 0
-
-        })
-
-      });
-
-    const data =
-      await response.json();
-
-    if (!response.ok) {
-
-      throw new Error(
-        data.error ||
-        "خطا در ثبت موتورسیکلت"
-      );
-
-    }
-
-    await loadDashboard();
-
-    showMessage(
-      "✅ موتورسیکلت با موفقیت ثبت شد."
-    );
-
-  } catch (error) {
-
-    showMessage(
-      `❌ ${error.message}`
-    );
-
-  }
-}
-
-
-// ========================
-// SERVICE CASE
-// ========================
-
-async function newCase() {
-
-  const message =
-    document.getElementById("message");
-
-  message.innerHTML = `
-
-    <div style="
-      padding:20px;
-      background:#fff;
-      border-radius:15px;
-      margin-top:20px;
-    ">
-
-      <h2>🔧 پذیرش تعمیرگاه</h2>
-
-      <p style="color:#666;">
-        مشتری و موتورسیکلت را انتخاب کنید.
-      </p>
-
-      <div id="caseFormStatus">
-        در حال دریافت اطلاعات...
-      </div>
-
-    </div>
-
-  `;
-
-  try {
-
-    const response =
-      await fetch(`${API_URL}/customers`);
-
-    if (!response.ok) {
-
-      throw new Error(
-        "خطا در دریافت مشتریان"
-      );
-
-    }
-
-    const customers =
-      await response.json();
-
-    if (!customers.length) {
-
-      message.innerHTML = `
-
-        <div style="
-          padding:20px;
-          background:#fff;
-          border-radius:15px;
-        ">
-
-          <h2>🔧 پذیرش تعمیرگاه</h2>
-
-          <p>
-            ابتدا باید مشتری ثبت کنید.
-          </p>
-
-          <button
-            onclick="newCustomer()"
-            style="${buttonStyle}"
-          >
-            ➕ ثبت مشتری
-          </button>
-
-        </div>
-
-      `;
-
-      return;
-    }
-
-    document.getElementById(
-      "caseFormStatus"
-    ).innerHTML = `
-
-      <select
-        id="caseCustomer"
-        onchange="loadCaseMotorcycles()"
-        style="${inputStyle}"
-      >
-
-        <option value="">
-          انتخاب مشتری *
-        </option>
-
-        ${customers.map(customer => `
-
-          <option value="${customer.id}">
-            ${customer.name}
-            ${customer.phone
-              ? ` - ${customer.phone}`
-              : ""}
-          </option>
-
-        `).join("")}
-
-      </select>
-
-      <select
-        id="caseMotorcycle"
-        style="${inputStyle}"
-      >
-
-        <option value="">
-          ابتدا مشتری را انتخاب کنید
-        </option>
-
-      </select>
-
-      <textarea
-        id="caseComplaint"
-        placeholder="شرح مشکل / درخواست مشتری *"
-        style="${inputStyle}height:120px;"
-      ></textarea>
-
-      <textarea
-        id="caseDiagnosis"
-        placeholder="تشخیص اولیه"
-        style="${inputStyle}height:100px;"
-      ></textarea>
-
-      <select
-        id="casePriority"
-        style="${inputStyle}"
-      >
-
-        <option value="NORMAL">
-          اولویت عادی
-        </option>
-
-        <option value="LOW">
-          اولویت پایین
-        </option>
-
-        <option value="HIGH">
-          اولویت بالا
-        </option>
-
-        <option value="URGENT">
-          🔴 فوری
-        </option>
-
-      </select>
-
-      <button
-        onclick="saveCase()"
-        style="${buttonStyle}"
-      >
-        💾 ثبت پذیرش
-      </button>
-
-    `;
-
-  } catch (error) {
-
-    showMessage(
-      `❌ ${error.message}`
-    );
-
-  }
-}
-
-async function loadCaseMotorcycles() {
-
-  const customerId =
-    document.getElementById(
-      "caseCustomer"
-    ).value;
-
-  const motorcycleSelect =
-    document.getElementById(
-      "caseMotorcycle"
-    );
-
-  if (!customerId) {
-
-    motorcycleSelect.innerHTML = `
-
-      <option value="">
-        ابتدا مشتری را انتخاب کنید
-      </option>
-
-    `;
-
-    return;
-  }
-
-  motorcycleSelect.innerHTML = `
-
-    <option value="">
-      در حال دریافت موتورسیکلت‌ها...
-    </option>
-
-  `;
-
-  try {
-
-    const response =
-      await fetch(
-        `${API_URL}/customers/${customerId}/motorcycles`
-      );
-
-    if (!response.ok) {
-
-      throw new Error(
-        "خطا در دریافت موتورسیکلت‌ها"
-      );
-
-    }
-
-    const motorcycles =
-      await response.json();
-
-    if (!motorcycles.length) {
-
-      motorcycleSelect.innerHTML = `
-
-        <option value="">
-          برای این مشتری موتورسیکلتی ثبت نشده است
-        </option>
-
-      `;
-
-      return;
-    }
-
-    motorcycleSelect.innerHTML = `
-
-      <option value="">
-        انتخاب موتورسیکلت *
-      </option>
-
-      ${motorcycles.map(motorcycle => `
-
-        <option value="${motorcycle.id}">
-
-          ${motorcycle.plate}
-
-          ${motorcycle.brand
-            ? ` - ${motorcycle.brand}`
-            : ""}
-
-          ${motorcycle.model
-            ? ` ${motorcycle.model}`
-            : ""}
-
-        </option>
-
-      `).join("")}
-
-    `;
-
-  } catch (error) {
-
-    motorcycleSelect.innerHTML = `
-
-      <option value="">
-        خطا در دریافت اطلاعات
-      </option>
-
-    `;
-
-  }
-}
-
-async function saveCase() {
-
-  const customerId =
-    document.getElementById(
-      "caseCustomer"
-    ).value;
-
-  const motorcycleId =
-    document.getElementById(
-      "caseMotorcycle"
-    ).value;
-
-  const complaint =
-    document.getElementById(
-      "caseComplaint"
-    ).value.trim();
-
-  const diagnosis =
-    document.getElementById(
-      "caseDiagnosis"
-    ).value.trim();
-
-  const priority =
-    document.getElementById(
-      "casePriority"
-    ).value;
-
-  if (!customerId) {
-
-    showMessage(
-      "⚠️ مشتری را انتخاب کنید."
-    );
-
-    return;
-  }
-
-  if (!motorcycleId) {
-
-    showMessage(
-      "⚠️ موتورسیکلت را انتخاب کنید."
-    );
-
-    return;
-  }
-
-  if (!complaint) {
-
-    showMessage(
-      "⚠️ شرح مشکل را وارد کنید."
-    );
-
-    return;
-  }
-
-  try {
-
-    const response =
-      await fetch(`${API_URL}/cases`, {
-
-        method: "POST",
-
-        headers: {
-          "Content-Type": "application/json"
-        },
-
-        body: JSON.stringify({
-
-          customerId,
-          motorcycleId,
-          complaint,
-          diagnosis,
-          priority
-
-        })
-
-      });
-
-    const data =
-      await response.json();
-
-    if (!response.ok) {
-
-      throw new Error(
-        data.error ||
-        "خطا در ثبت پذیرش"
-      );
-
-    }
-
-    await loadDashboard();
-
-    showMessage(`
-
-      <strong>
-        ✅ پذیرش با موفقیت ثبت شد.
-      </strong>
-
-      <br>
-
-      شماره پرونده:
-      ${data.id}
-
-    `);
-
-  } catch (error) {
-
-    showMessage(
-      `❌ ${error.message}`
-    );
-
-  }
-}
-
-
-// ========================
-// CASE LIST
-// ========================
 
 async function loadCases() {
+  const container = document.getElementById("cases");
 
-  const caseList =
-    document.getElementById(
-      "caseList"
-    );
-
-  if (!caseList) return;
+  if (!container) return;
 
   try {
-
-    const response =
-      await fetch(`${API_URL}/cases`);
-
-    if (!response.ok) {
-
-      throw new Error("خطا");
-
-    }
-
-    const cases =
-      await response.json();
+    const cases = await api("/cases");
 
     if (!cases.length) {
-
-      caseList.innerHTML = `
-
-        <p style="color:#777;">
+      container.innerHTML = `
+        <div style="
+          padding:20px;
+          background:#f5f5f5;
+          border-radius:10px;
+        ">
           هنوز پرونده‌ای ثبت نشده است.
-        </p>
-
+        </div>
       `;
-
       return;
     }
 
-    caseList.innerHTML =
-      cases.map(item => `
-
+    container.innerHTML = cases.map(item => `
       <div style="
-        padding:16px;
-        margin:10px 0;
-        border:1px solid #eee;
+        background:#fff;
+        border:1px solid #ddd;
         border-radius:12px;
-        background:#fafafa;
+        padding:16px;
+        margin-bottom:12px;
       ">
 
-        <strong>
-          👤 ${item.customer_name}
-        </strong>
+        <div style="font-weight:bold;font-size:17px;">
+          👤 ${item.customer_name || "بدون نام"}
+        </div>
 
-        <br>
+        <div style="margin-top:8px;">
+          🏍️ ${item.brand || ""} ${item.model || ""}
+          — پلاک: ${item.plate || "-"}
+        </div>
 
-        🏍️
-        ${item.brand || ""}
-        ${item.model || ""}
-        — پلاک:
-        ${item.plate}
+        <div style="margin-top:8px;">
+          🔧 ${item.complaint || "-"}
+        </div>
 
-        <br>
-
-        🔧
-        ${item.complaint}
-
-        <br>
-
-        <span style="
-          display:inline-block;
-          margin-top:8px;
-          padding:5px 10px;
-          border-radius:8px;
-          background:#eee;
-        ">
+        <div style="margin-top:8px;">
           وضعیت:
-          ${translateStatus(item.status)}
-        </span>
+          <strong>${statusText(item.status)}</strong>
 
-        <span style="
-          display:inline-block;
-          margin-top:8px;
-          padding:5px 10px;
-          border-radius:8px;
-          background:#eee;
-        ">
+          &nbsp;
+
           اولویت:
-          ${translatePriority(item.priority)}
-        </span>
-
-        <br><br>
+          <strong>${priorityText(item.priority)}</strong>
+        </div>
 
         <button
           onclick="openCase('${item.id}')"
@@ -1086,385 +273,604 @@ async function loadCases() {
         </button>
 
       </div>
-
     `).join("");
 
   } catch (error) {
 
-    caseList.innerHTML = `
-
-      <p style="color:#c00;">
-        خطا در دریافت پرونده‌ها
-      </p>
-
+    container.innerHTML = `
+      <div style="
+        padding:15px;
+        background:#ffe5e5;
+        color:#a00000;
+        border-radius:8px;
+      ">
+        ❌ خطا در دریافت پرونده‌ها:
+        ${error.message}
+      </div>
     `;
-
   }
 }
 
+function showCustomerForm() {
 
-// ========================
-// CASE DETAIL
-// ========================
+  const forms = document.getElementById("forms");
 
-async function openCase(caseId) {
-
-  const message =
-    document.getElementById(
-      "message"
-    );
-
-  message.innerHTML = `
-
+  forms.innerHTML = `
     <div style="
-      padding:20px;
-      background:#fff;
-      border-radius:15px;
-      margin-top:20px;
+      padding:18px;
+      background:#f7f7f7;
+      border-radius:12px;
+      margin-bottom:20px;
     ">
 
-      <h2>
-        📋 جزئیات پرونده
-      </h2>
+      <h3>➕ ثبت مشتری جدید</h3>
 
-      <p>
-        در حال دریافت اطلاعات...
-      </p>
+      <input id="customerName"
+        placeholder="نام و نام خانوادگی"
+        style="${inputStyle}">
+
+      <input id="customerPhone"
+        placeholder="شماره تماس"
+        style="${inputStyle}">
+
+      <input id="customerAddress"
+        placeholder="آدرس"
+        style="${inputStyle}">
+
+      <textarea id="customerNotes"
+        placeholder="یادداشت"
+        style="${inputStyle};min-height:80px;"></textarea>
+
+      <button onclick="saveCustomer()" style="${buttonStyle}">
+        💾 ذخیره مشتری
+      </button>
+
+      <button onclick="closeForms()" style="${buttonStyle};background:#777;">
+        بستن
+      </button>
 
     </div>
-
   `;
+}
+
+async function saveCustomer() {
+
+  const name = document.getElementById("customerName").value.trim();
+  const phone = document.getElementById("customerPhone").value.trim();
+  const address = document.getElementById("customerAddress").value.trim();
+  const notes = document.getElementById("customerNotes").value.trim();
+
+  if (!name || !phone) {
+    showMessage("نام و شماره تماس الزامی است.", true);
+    return;
+  }
 
   try {
 
-    const response =
-      await fetch(
-        `${API_URL}/cases/${caseId}`
-      );
+    await api("/customers", {
+      method: "POST",
+      body: JSON.stringify({
+        name,
+        phone,
+        address,
+        notes
+      })
+    });
 
-    if (!response.ok) {
+    await loadDashboard();
 
-      throw new Error(
-        "پرونده پیدا نشد"
-      );
+    showMessage("✅ مشتری با موفقیت ثبت شد.");
 
-    }
+  } catch (error) {
 
-    const item =
-      await response.json();
+    showMessage(
+      "❌ خطا در ثبت مشتری: " + error.message,
+      true
+    );
+  }
+}
 
-    message.innerHTML = `
+async function showMotorcycleForm() {
 
+  try {
+
+    const customers = await api("/customers");
+
+    const forms = document.getElementById("forms");
+
+    forms.innerHTML = `
       <div style="
-        padding:20px;
-        background:#fff;
-        border-radius:15px;
-        margin-top:20px;
+        padding:18px;
+        background:#f7f7f7;
+        border-radius:12px;
+        margin-bottom:20px;
       ">
 
-        <h2>
-          📋 پرونده تعمیر
-        </h2>
+        <h3>🏍️ ثبت موتورسیکلت</h3>
+
+        <select id="motorCustomer" style="${inputStyle}">
+          <option value="">انتخاب مشتری</option>
+
+          ${customers.map(c => `
+            <option value="${c.id}">
+              ${c.name} — ${c.phone}
+            </option>
+          `).join("")}
+
+        </select>
+
+        <input id="motorPlate"
+          placeholder="پلاک"
+          style="${inputStyle}">
+
+        <input id="motorBrand"
+          placeholder="برند"
+          style="${inputStyle}">
+
+        <input id="motorModel"
+          placeholder="مدل"
+          style="${inputStyle}">
+
+        <input id="motorYear"
+          placeholder="سال"
+          type="number"
+          style="${inputStyle}">
+
+        <input id="motorColor"
+          placeholder="رنگ"
+          style="${inputStyle}">
+
+        <input id="motorVin"
+          placeholder="VIN / شماره شاسی"
+          style="${inputStyle}">
+
+        <input id="motorMileage"
+          placeholder="کارکرد"
+          type="number"
+          value="0"
+          style="${inputStyle}">
+
+        <button onclick="saveMotorcycle()" style="${buttonStyle}">
+          💾 ذخیره موتورسیکلت
+        </button>
+
+        <button onclick="closeForms()" style="${buttonStyle};background:#777;">
+          بستن
+        </button>
+
+      </div>
+    `;
+
+  } catch (error) {
+
+    showMessage(
+      "❌ خطا در دریافت مشتریان: " + error.message,
+      true
+    );
+  }
+}
+
+async function saveMotorcycle() {
+
+  const customer_id =
+    document.getElementById("motorCustomer").value;
+
+  const plate =
+    document.getElementById("motorPlate").value.trim();
+
+  const brand =
+    document.getElementById("motorBrand").value.trim();
+
+  const model =
+    document.getElementById("motorModel").value.trim();
+
+  const yearValue =
+    document.getElementById("motorYear").value;
+
+  const color =
+    document.getElementById("motorColor").value.trim();
+
+  const vin =
+    document.getElementById("motorVin").value.trim();
+
+  const mileageValue =
+    document.getElementById("motorMileage").value;
+
+  if (!customer_id || !plate) {
+    showMessage(
+      "انتخاب مشتری و وارد کردن پلاک الزامی است.",
+      true
+    );
+    return;
+  }
+
+  try {
+
+    await api("/motorcycles", {
+      method: "POST",
+      body: JSON.stringify({
+        customer_id,
+        plate,
+        brand,
+        model,
+        year: yearValue ? Number(yearValue) : null,
+        color,
+        vin,
+        mileage: mileageValue ? Number(mileageValue) : 0
+      })
+    });
+
+    await loadDashboard();
+
+    showMessage("✅ موتورسیکلت با موفقیت ثبت شد.");
+
+  } catch (error) {
+
+    showMessage(
+      "❌ خطا در ثبت موتورسیکلت: " + error.message,
+      true
+    );
+  }
+}
+
+async function showCaseForm() {
+
+  try {
+
+    const customers = await api("/customers");
+
+    const forms = document.getElementById("forms");
+
+    forms.innerHTML = `
+      <div style="
+        padding:18px;
+        background:#f7f7f7;
+        border-radius:12px;
+        margin-bottom:20px;
+      ">
+
+        <h3>🔧 پذیرش تعمیرگاه</h3>
+
+        <label>مشتری</label>
+
+        <select
+          id="caseCustomer"
+          onchange="loadCustomerMotorcycles()"
+          style="${inputStyle}"
+        >
+          <option value="">انتخاب مشتری</option>
+
+          ${customers.map(c => `
+            <option value="${c.id}">
+              ${c.name} — ${c.phone}
+            </option>
+          `).join("")}
+
+        </select>
+
+        <label>موتورسیکلت</label>
+
+        <select
+          id="caseMotorcycle"
+          style="${inputStyle}"
+        >
+          <option value="">
+            ابتدا مشتری را انتخاب کنید
+          </option>
+        </select>
+
+        <textarea
+          id="caseComplaint"
+          placeholder="شرح مشکل / درخواست مشتری"
+          style="${inputStyle};min-height:100px;"
+        ></textarea>
+
+        <textarea
+          id="caseDiagnosis"
+          placeholder="تشخیص اولیه"
+          style="${inputStyle};min-height:80px;"
+        ></textarea>
+
+        <select id="casePriority" style="${inputStyle}">
+          <option value="NORMAL">اولویت عادی</option>
+          <option value="LOW">اولویت کم</option>
+          <option value="HIGH">اولویت زیاد</option>
+          <option value="URGENT">فوری</option>
+        </select>
+
+        <button onclick="saveCase()" style="${buttonStyle}">
+          💾 ثبت پرونده
+        </button>
+
+        <button onclick="closeForms()" style="${buttonStyle};background:#777;">
+          بستن
+        </button>
+
+      </div>
+    `;
+
+  } catch (error) {
+
+    showMessage(
+      "❌ خطا در دریافت اطلاعات: " + error.message,
+      true
+    );
+  }
+}
+
+async function loadCustomerMotorcycles() {
+
+  const customerId =
+    document.getElementById("caseCustomer").value;
+
+  const select =
+    document.getElementById("caseMotorcycle");
+
+  if (!customerId) {
+
+    select.innerHTML = `
+      <option value="">
+        ابتدا مشتری را انتخاب کنید
+      </option>
+    `;
+
+    return;
+  }
+
+  try {
+
+    const motorcycles =
+      await api(`/motorcycles/customer/${customerId}`);
+
+    if (!motorcycles.length) {
+
+      select.innerHTML = `
+        <option value="">
+          برای این مشتری موتورسیکلتی ثبت نشده
+        </option>
+      `;
+
+      return;
+    }
+
+    select.innerHTML = motorcycles.map(m => `
+      <option value="${m.id}">
+        ${m.brand || ""} ${m.model || ""} — پلاک ${m.plate}
+      </option>
+    `).join("");
+
+  } catch (error) {
+
+    showMessage(
+      "❌ خطا در دریافت موتورسیکلت‌ها: " + error.message,
+      true
+    );
+  }
+}
+
+async function saveCase() {
+
+  const customer_id =
+    document.getElementById("caseCustomer").value;
+
+  const motorcycle_id =
+    document.getElementById("caseMotorcycle").value;
+
+  const complaint =
+    document.getElementById("caseComplaint").value.trim();
+
+  const diagnosis =
+    document.getElementById("caseDiagnosis").value.trim();
+
+  const priority =
+    document.getElementById("casePriority").value;
+
+  if (!customer_id || !motorcycle_id || !complaint) {
+
+    showMessage(
+      "مشتری، موتورسیکلت و شرح مشکل الزامی هستند.",
+      true
+    );
+
+    return;
+  }
+
+  try {
+
+    await api("/cases", {
+      method: "POST",
+      body: JSON.stringify({
+        customer_id,
+        motorcycle_id,
+        complaint,
+        diagnosis,
+        priority
+      })
+    });
+
+    await loadDashboard();
+
+    showMessage("✅ پرونده تعمیر با موفقیت ثبت شد.");
+
+  } catch (error) {
+
+    showMessage(
+      "❌ خطا در ثبت پرونده: " + error.message,
+      true
+    );
+  }
+}
+
+async function openCase(caseId) {
+
+  try {
+
+    const item =
+      await api(`/cases/${caseId}`);
+
+    const forms =
+      document.getElementById("forms");
+
+    forms.innerHTML = `
+      <div style="
+        padding:20px;
+        background:#f7f7f7;
+        border-radius:12px;
+        margin-bottom:20px;
+      ">
+
+        <h2>📋 جزئیات پرونده</h2>
 
         <p>
-          <strong>
-            👤 مشتری:
-          </strong>
-
-          ${item.customer_name}
-
+          👤 <strong>${item.customer_name || "-"}</strong>
         </p>
 
         <p>
-          <strong>
-            📞 تلفن:
-          </strong>
-
-          ${item.customer_phone || "-"}
-
-        </p>
-
-        <p>
-
-          <strong>
-            🏍️ موتورسیکلت:
-          </strong>
-
+          🏍️
           ${item.brand || ""}
           ${item.model || ""}
-
+          — پلاک:
+          ${item.plate || "-"}
         </p>
 
         <p>
-
-          <strong>
-            پلاک:
-          </strong>
-
-          ${item.plate}
-
+          🔧
+          <strong>شرح مشکل:</strong>
+          ${item.complaint || "-"}
         </p>
 
         <p>
+          🩺
+          <strong>تشخیص:</strong>
+          ${item.diagnosis || "ثبت نشده"}
+        </p>
 
-          <strong>
-            رنگ:
-          </strong>
-
-          ${item.color || "-"}
-
+        <p>
+          اولویت:
+          <strong>${priorityText(item.priority)}</strong>
         </p>
 
         <hr>
 
-        <p>
-
-          <strong>
-            🔧 مشکل اعلام‌شده:
-          </strong>
-
-          <br>
-
-          ${item.complaint}
-
-        </p>
-
-        <p>
-
-          <strong>
-            🩺 تشخیص:
-          </strong>
-
-          <br>
-
-          ${item.diagnosis || "هنوز ثبت نشده"}
-
-        </p>
-
-        <p>
-
-          <strong>
-            اولویت:
-          </strong>
-
-          ${translatePriority(item.priority)}
-
-        </p>
-
-        <p>
-
-          <strong>
-            وضعیت فعلی:
-          </strong>
-
-          ${translateStatus(item.status)}
-
-        </p>
-
-        <hr>
-
-        <h3>
-          🔄 تغییر وضعیت پرونده
-        </h3>
+        <label>
+          تغییر وضعیت پرونده
+        </label>
 
         <select
           id="caseStatus"
           style="${inputStyle}"
         >
 
-          ${Object.entries({
+          <option value="OPEN"
+            ${item.status === "OPEN" ? "selected" : ""}>
+            باز
+          </option>
 
-            OPEN:
-              "باز",
+          <option value="DIAGNOSIS"
+            ${item.status === "DIAGNOSIS" ? "selected" : ""}>
+            در حال عیب‌یابی
+          </option>
 
-            DIAGNOSIS:
-              "در حال عیب‌یابی",
+          <option value="WAITING_APPROVAL"
+            ${item.status === "WAITING_APPROVAL" ? "selected" : ""}>
+            در انتظار تأیید
+          </option>
 
-            WAITING_APPROVAL:
-              "منتظر تأیید",
+          <option value="IN_PROGRESS"
+            ${item.status === "IN_PROGRESS" ? "selected" : ""}>
+            در حال تعمیر
+          </option>
 
-            IN_PROGRESS:
-              "در حال تعمیر",
+          <option value="WAITING_PARTS"
+            ${item.status === "WAITING_PARTS" ? "selected" : ""}>
+            در انتظار قطعه
+          </option>
 
-            WAITING_PARTS:
-              "منتظر قطعه",
+          <option value="READY"
+            ${item.status === "READY" ? "selected" : ""}>
+            آماده تحویل
+          </option>
 
-            READY:
-              "آماده تحویل",
+          <option value="COMPLETED"
+            ${item.status === "COMPLETED" ? "selected" : ""}>
+            تکمیل شده
+          </option>
 
-            COMPLETED:
-              "تکمیل شده",
-
-            CLOSED:
-              "بسته شده"
-
-          }).map(
-            ([value, label]) => `
-
-              <option
-                value="${value}"
-                ${item.status === value
-                  ? "selected"
-                  : ""}
-              >
-                ${label}
-              </option>
-
-            `
-          ).join("")}
+          <option value="CLOSED"
+            ${item.status === "CLOSED" ? "selected" : ""}>
+            بسته شده
+          </option>
 
         </select>
 
         <button
-          onclick="changeCaseStatus('${item.id}')"
+          onclick="changeCaseStatus('${caseId}')"
           style="${buttonStyle}"
         >
           💾 ذخیره وضعیت
         </button>
 
-      </div>
+        <button
+          onclick="closeForms()"
+          style="${buttonStyle};background:#777;"
+        >
+          بستن
+        </button>
 
+      </div>
     `;
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth"
+    });
 
   } catch (error) {
 
     showMessage(
-      `❌ ${error.message}`
+      "❌ خطا در دریافت پرونده: " + error.message,
+      true
     );
-
   }
 }
-
-
-// ========================
-// CHANGE CASE STATUS
-// ========================
 
 async function changeCaseStatus(caseId) {
 
   const status =
-    document.getElementById(
-      "caseStatus"
-    ).value;
+    document.getElementById("caseStatus").value;
 
   try {
 
-    const response =
-      await fetch(
-        `${API_URL}/cases/${caseId}/status`,
-        {
-
-          method: "PATCH",
-
-          headers: {
-            "Content-Type": "application/json"
-          },
-
-          body: JSON.stringify({
-            status
-          })
-
-        }
-      );
-
-    const data =
-      await response.json();
-
-    if (!response.ok) {
-
-      throw new Error(
-        data.error ||
-        "خطا در تغییر وضعیت"
-      );
-
-    }
+    await api(`/cases/${caseId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        status
+      })
+    });
 
     await loadDashboard();
 
-    showMessage(`
-
-      <strong>
-        ✅ وضعیت پرونده تغییر کرد.
-      </strong>
-
-      <br>
-
-      وضعیت جدید:
-      ${translateStatus(data.status)}
-
-    `);
+    showMessage(
+      "✅ وضعیت پرونده با موفقیت تغییر کرد."
+    );
 
   } catch (error) {
 
     showMessage(
-      `❌ ${error.message}`
+      "❌ خطا در تغییر وضعیت پرونده: " + error.message,
+      true
     );
-
   }
 }
 
+function closeForms() {
 
-// ========================
-// TRANSLATIONS
-// ========================
+  const forms =
+    document.getElementById("forms");
 
-function translateStatus(status) {
-
-  const statuses = {
-
-    OPEN:
-      "باز",
-
-    DIAGNOSIS:
-      "در حال عیب‌یابی",
-
-    WAITING_APPROVAL:
-      "منتظر تأیید",
-
-    IN_PROGRESS:
-      "در حال تعمیر",
-
-    WAITING_PARTS:
-      "منتظر قطعه",
-
-    READY:
-      "آماده تحویل",
-
-    COMPLETED:
-      "تکمیل شده",
-
-    CLOSED:
-      "بسته شده"
-
-  };
-
-  return statuses[status] || status;
+  if (forms) {
+    forms.innerHTML = "";
+  }
 }
-
-function translatePriority(priority) {
-
-  const priorities = {
-
-    LOW:
-      "پایین",
-
-    NORMAL:
-      "عادی",
-
-    HIGH:
-      "بالا",
-
-    URGENT:
-      "فوری"
-
-  };
-
-  return priorities[priority] || priority;
-}
-
-
-// ========================
-// START
-// ========================
 
 loadDashboard();
