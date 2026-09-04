@@ -3,33 +3,21 @@
 
   /*
    * MotoClinic Public Website
-   * Frontend -> Real Backend API
+   * Frontend API connection
    */
 
   const API_BASE =
     window.MOTOCLINIC_API_URL ||
-    (
-      window.location.hostname === "localhost" ||
-      window.location.hostname === "127.0.0.1"
-        ? "http://localhost:4000"
-        : "https://motoclinic-api.onrender.com"
-    );
+    (window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1"
+      ? "http://localhost:4000"
+      : "https://motoclinic-api.onrender.com");
 
-  const REQUEST_ENDPOINT =
-    `${API_BASE}/api/customer-requests`;
+  const REQUEST_ENDPOINT = `${API_BASE}/api/customer-requests`;
+  const CASE_ENDPOINT = `${API_BASE}/api/cases`;
 
-  const CASE_ENDPOINT =
-    `${API_BASE}/api/cases`;
-
-  const $ = (selector) =>
-    document.querySelector(selector);
-
-  const $$ = (selector) =>
-    Array.from(document.querySelectorAll(selector));
-
-  /* =========================
-     HELPERS
-  ========================= */
+  const $ = (selector) => document.querySelector(selector);
+  const $$ = (selector) => document.querySelectorAll(selector);
 
   function clean(value) {
     return String(value ?? "").trim();
@@ -44,33 +32,30 @@
       .replaceAll("'", "&#039;");
   }
 
-  function showMessage(
-    container,
-    message,
-    type = "info"
-  ) {
-    if (!container) return;
+  function showMessage(element, message, type = "info") {
+    if (!element) return;
 
-    container.innerHTML = `
-      <div class="site-message ${type}">
-        ${escapeHtml(message)}
-      </div>
-    `;
+    element.textContent = message;
+    element.className = `site-message ${type}`;
+    element.hidden = false;
   }
 
-  async function apiRequest(
-    url,
-    options = {}
-  ) {
-    const response =
-      await fetch(url, {
-        ...options,
-        headers: {
-          "Content-Type":
-            "application/json",
-          ...(options.headers || {}),
-        },
-      });
+  function hideMessage(element) {
+    if (!element) return;
+
+    element.hidden = true;
+    element.textContent = "";
+  }
+
+  async function apiRequest(url, options = {}) {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...(options.headers || {}),
+      },
+    });
 
     let data = null;
 
@@ -82,8 +67,7 @@
 
     if (!response.ok) {
       throw new Error(
-        data?.message ||
-        "خطا در ارتباط با سرور"
+        data?.message || `خطای سرور (${response.status})`
       );
     }
 
@@ -91,34 +75,49 @@
   }
 
   /* =========================
+     MOBILE MENU
+  ========================= */
+
+  const menuButton = $("[data-menu-toggle]");
+  const mobileMenu = $("[data-mobile-menu]");
+
+  if (menuButton && mobileMenu) {
+    menuButton.addEventListener("click", () => {
+      const isOpen = mobileMenu.classList.toggle("is-open");
+
+      menuButton.setAttribute(
+        "aria-expanded",
+        String(isOpen)
+      );
+    });
+
+    $$("#siteNav a").forEach((link) => {
+      link.addEventListener("click", () => {
+        mobileMenu.classList.remove("is-open");
+        menuButton.setAttribute("aria-expanded", "false");
+      });
+    });
+  }
+
+  /* =========================
      REQUEST MODAL
   ========================= */
 
-  const requestModal =
-    $("#requestModal");
-
-  const openRequestButtons =
-    $$(
-      '[data-open-request], #openRequestModal, #heroRequestBtn, #floatingRequestBtn'
-    );
-
-  const closeRequestButtons =
-    $$(
-      '[data-close-request], #closeRequestModal'
-    );
+  const requestModal = $("#requestModal");
+  const openRequestButtons = $$(
+    "[data-open-request], #openRequest, #heroRequestButton"
+  );
+  const closeRequestButtons = $$(
+    "[data-close-request], #closeRequest"
+  );
 
   function openRequestModal() {
     if (!requestModal) return;
 
-    requestModal.classList.add("open");
-    requestModal.setAttribute(
-      "aria-hidden",
-      "false"
-    );
+    requestModal.classList.add("is-open");
+    requestModal.setAttribute("aria-hidden", "false");
 
-    document.body.classList.add(
-      "modal-open"
-    );
+    document.body.classList.add("modal-open");
 
     setTimeout(() => {
       $("#requestName")?.focus();
@@ -128,191 +127,155 @@
   function closeRequestModal() {
     if (!requestModal) return;
 
-    requestModal.classList.remove("open");
-    requestModal.setAttribute(
-      "aria-hidden",
-      "true"
-    );
+    requestModal.classList.remove("is-open");
+    requestModal.setAttribute("aria-hidden", "true");
 
-    document.body.classList.remove(
-      "modal-open"
-    );
+    document.body.classList.remove("modal-open");
   }
 
-  openRequestButtons.forEach(
-    (button) => {
-      button.addEventListener(
-        "click",
-        (event) => {
-          event.preventDefault();
-          openRequestModal();
-        }
-      );
-    }
-  );
+  openRequestButtons.forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      openRequestModal();
+    });
+  });
 
-  closeRequestButtons.forEach(
-    (button) => {
-      button.addEventListener(
-        "click",
-        (event) => {
-          event.preventDefault();
-          closeRequestModal();
-        }
-      );
-    }
-  );
+  closeRequestButtons.forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      closeRequestModal();
+    });
+  });
 
-  requestModal?.addEventListener(
-    "click",
-    (event) => {
-      if (
-        event.target ===
-        requestModal
-      ) {
+  if (requestModal) {
+    requestModal.addEventListener("click", (event) => {
+      if (event.target === requestModal) {
         closeRequestModal();
       }
-    }
-  );
+    });
+  }
 
-  document.addEventListener(
-    "keydown",
-    (event) => {
-      if (
-        event.key === "Escape" &&
-        requestModal?.classList.contains(
-          "open"
-        )
-      ) {
-        closeRequestModal();
-      }
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeRequestModal();
     }
-  );
+  });
 
   /* =========================
-     CUSTOMER REQUEST
+     REQUEST FORM
   ========================= */
 
-  const requestForm =
-    $("#requestForm");
+  const requestForm = $("#requestForm");
+  const requestFormMessage = $("#requestFormMessage");
 
-  requestForm?.addEventListener(
-    "submit",
-    async (event) => {
+  if (requestForm) {
+    requestForm.addEventListener("submit", async (event) => {
       event.preventDefault();
+
+      hideMessage(requestFormMessage);
+
+      const name =
+        clean($("#requestName")?.value);
+
+      const phone =
+        clean($("#requestPhone")?.value);
+
+      const motorcycle =
+        clean($("#requestMotorcycle")?.value);
+
+      const service =
+        clean($("#requestService")?.value);
+
+      const description =
+        clean($("#requestDescription")?.value);
+
+      if (!name) {
+        showMessage(
+          requestFormMessage,
+          "لطفاً نام خود را وارد کنید.",
+          "error"
+        );
+        $("#requestName")?.focus();
+        return;
+      }
+
+      if (!phone) {
+        showMessage(
+          requestFormMessage,
+          "لطفاً شماره تماس خود را وارد کنید.",
+          "error"
+        );
+        $("#requestPhone")?.focus();
+        return;
+      }
+
+      const phoneDigits = phone.replace(/\D/g, "");
+
+      if (phoneDigits.length < 10) {
+        showMessage(
+          requestFormMessage,
+          "شماره تماس واردشده معتبر نیست.",
+          "error"
+        );
+        $("#requestPhone")?.focus();
+        return;
+      }
 
       const submitButton =
         requestForm.querySelector(
           'button[type="submit"]'
         );
 
-      const messageBox =
-        $("#requestFormMessage");
-
-      const formData =
-        new FormData(requestForm);
-
-      const name =
-        clean(
-          formData.get("name") ||
-          $("#requestName")?.value
-        );
-
-      const phone =
-        clean(
-          formData.get("phone") ||
-          $("#requestPhone")?.value
-        );
-
-      const motorcycle =
-        clean(
-          formData.get("motorcycle") ||
-          $("#requestMotorcycle")?.value
-        );
-
-      const service =
-        clean(
-          formData.get("service") ||
-          $("#requestService")?.value
-        );
-
-      const description =
-        clean(
-          formData.get("description") ||
-          formData.get("message") ||
-          $("#requestDescription")?.value
-        );
-
-      if (!name || !phone) {
-        showMessage(
-          messageBox,
-          "لطفاً نام و شماره تماس را وارد کنید.",
-          "error"
-        );
-        return;
-      }
+      const originalText =
+        submitButton?.textContent || "ثبت درخواست";
 
       if (submitButton) {
         submitButton.disabled = true;
-        submitButton.dataset.originalText =
-          submitButton.textContent;
-
-        submitButton.textContent =
-          "در حال ثبت درخواست...";
+        submitButton.textContent = "در حال ثبت...";
       }
 
       try {
-        const result =
-          await apiRequest(
-            REQUEST_ENDPOINT,
-            {
-              method: "POST",
-              body: JSON.stringify({
-                name,
-                phone,
-                motorcycle,
-                service,
-                description,
-              }),
-            }
+        const data = await apiRequest(
+          REQUEST_ENDPOINT,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              name,
+              phone,
+              motorcycle,
+              service,
+              description,
+            }),
+          }
+        );
+
+        if (data?.request) {
+          localStorage.setItem(
+            "motoclinic_last_request",
+            JSON.stringify(data.request)
           );
+        }
 
         showMessage(
-          messageBox,
-          result?.message ||
+          requestFormMessage,
+          data?.message ||
             "درخواست شما با موفقیت ثبت شد.",
           "success"
         );
 
         requestForm.reset();
 
-        /*
-         * اطلاعات آخرین درخواست فقط
-         * برای تجربه کاربری در مرورگر نگهداری می‌شود.
-         * مرجع اصلی اطلاعات، Database است.
-         */
-        if (result?.request) {
-          try {
-            localStorage.setItem(
-              "motoclinic_last_request",
-              JSON.stringify(
-                result.request
-              )
-            );
-          } catch {}
-        }
-
         setTimeout(() => {
           closeRequestModal();
         }, 1800);
       } catch (error) {
         console.error(
-          "REQUEST SUBMIT ERROR:",
+          "Customer request error:",
           error
         );
 
         showMessage(
-          messageBox,
+          requestFormMessage,
           error.message ||
             "ثبت درخواست انجام نشد. لطفاً دوباره تلاش کنید.",
           "error"
@@ -320,66 +283,59 @@
       } finally {
         if (submitButton) {
           submitButton.disabled = false;
-
-          submitButton.textContent =
-            submitButton.dataset.originalText ||
-            "ثبت درخواست";
+          submitButton.textContent = originalText;
         }
       }
-    }
-  );
+    });
+  }
 
   /* =========================
      TRACKING
   ========================= */
 
-  const trackingForm =
-    $("#trackingForm");
+  const trackingForm = $("#trackingForm");
+  const trackingResult = $("#trackingResult");
 
-  const trackingResult =
-    $("#trackingResult");
+  function statusLabel(status) {
+    const value = clean(status).toUpperCase();
 
-  function getStatusLabel(status) {
     const labels = {
-      OPEN: "باز",
-      DIAGNOSIS:
-        "در حال عیب‌یابی",
-      WAITING_APPROVAL:
-        "در انتظار تأیید",
-      IN_PROGRESS:
-        "در حال تعمیر",
-      WAITING_PARTS:
-        "در انتظار قطعه",
-      READY:
-        "آماده تحویل",
-      COMPLETED:
-        "تکمیل شده",
-      CLOSED:
-        "بسته شده",
+      RECEIVED: "دریافت موتور",
+      INSPECTION: "در حال بررسی",
+      DIAGNOSIS: "تشخیص عیب",
+      WAITING_APPROVAL: "در انتظار تأیید",
+      APPROVED: "تأیید شده",
+      IN_PROGRESS: "در حال تعمیر",
+      WAITING_PART: "در انتظار قطعه",
+      READY: "آماده تحویل",
+      DELIVERED: "تحویل شده",
+      COMPLETED: "تکمیل شده",
+      CANCELLED: "لغو شده",
+      NEW: "جدید",
     };
 
-    return (
-      labels[status] ||
-      status ||
-      "نامشخص"
-    );
+    return labels[value] || status || "نامشخص";
   }
 
-  function renderCase(caseData) {
+  function renderTrackingCase(caseData) {
     if (!trackingResult) return;
 
     if (!caseData) {
-      showMessage(
-        trackingResult,
-        "پرونده‌ای با این کد پیدا نشد.",
-        "error"
-      );
+      trackingResult.innerHTML = `
+        <div class="tracking-empty">
+          <strong>پرونده‌ای پیدا نشد.</strong>
+          <span>کد پیگیری را بررسی کنید و دوباره تلاش کنید.</span>
+        </div>
+      `;
       return;
     }
 
     const customerName =
-      caseData.customer_name ||
-      "مشتری";
+      escapeHtml(
+        caseData.customer_name ||
+        caseData.customerName ||
+        "مشتری"
+      );
 
     const motorcycle =
       [
@@ -387,35 +343,28 @@
         caseData.motorcycle_model,
       ]
         .filter(Boolean)
-        .join(" ") ||
-      "موتورسیکلت";
+        .join(" ");
 
-    const plate =
-      caseData.motorcycle_plate ||
-      "ثبت نشده";
+    const code =
+      caseData.code ||
+      caseData.case_code ||
+      caseData.id ||
+      "—";
 
     const status =
-      getStatusLabel(
-        caseData.status
-      );
+      statusLabel(caseData.status);
 
-    const complaint =
-      caseData.complaint ||
-      "ثبت نشده";
+    const description =
+      caseData.description ||
+      caseData.problem ||
+      "توضیحی ثبت نشده است.";
 
     trackingResult.innerHTML = `
       <div class="tracking-card">
         <div class="tracking-card-head">
           <div>
-            <span class="tracking-eyebrow">
-              وضعیت پرونده
-            </span>
-
-            <h3>
-              ${escapeHtml(
-                customerName
-              )}
-            </h3>
+            <small>کد پیگیری</small>
+            <strong>${escapeHtml(code)}</strong>
           </div>
 
           <span class="tracking-status">
@@ -423,237 +372,195 @@
           </span>
         </div>
 
-        <div class="tracking-grid">
+        <div class="tracking-info">
           <div>
-            <small>موتورسیکلت</small>
+            <span>مشتری</span>
+            <strong>${customerName}</strong>
+          </div>
+
+          <div>
+            <span>موتورسیکلت</span>
             <strong>
-              ${escapeHtml(
-                motorcycle
-              )}
+              ${escapeHtml(motorcycle || "ثبت نشده")}
             </strong>
           </div>
 
           <div>
-            <small>پلاک</small>
-            <strong>
-              ${escapeHtml(plate)}
-            </strong>
+            <span>وضعیت تعمیر</span>
+            <strong>${escapeHtml(status)}</strong>
           </div>
 
           <div>
-            <small>شرح مشکل</small>
-            <strong>
-              ${escapeHtml(
-                complaint
-              )}
-            </strong>
+            <span>شرح</span>
+            <strong>${escapeHtml(description)}</strong>
           </div>
         </div>
       </div>
     `;
   }
 
-  trackingForm?.addEventListener(
-    "submit",
-    async (event) => {
+  if (trackingForm) {
+    trackingForm.addEventListener("submit", async (event) => {
       event.preventDefault();
 
       const input =
         trackingForm.querySelector(
-          'input[name="code"], #trackingCode'
+          'input[name="code"], #trackingCode, input'
         );
 
-      const button =
+      const code = clean(input?.value);
+
+      if (!code) {
+        if (trackingResult) {
+          trackingResult.innerHTML = `
+            <div class="tracking-empty error">
+              لطفاً کد پیگیری را وارد کنید.
+            </div>
+          `;
+        }
+
+        input?.focus();
+        return;
+      }
+
+      const submitButton =
         trackingForm.querySelector(
           'button[type="submit"]'
         );
 
-      const code =
-        clean(input?.value);
+      const originalText =
+        submitButton?.textContent || "پیگیری";
 
-      if (!code) {
-        showMessage(
-          trackingResult,
-          "کد پیگیری را وارد کنید.",
-          "error"
-        );
-        return;
-      }
-
-      if (button) {
-        button.disabled = true;
-        button.dataset.originalText =
-          button.textContent;
-        button.textContent =
-          "در حال بررسی...";
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = "در حال بررسی...";
       }
 
       try {
-        /*
-         * Backend برای GET /api/cases?code=
-         * پشتیبانی شده است.
-         */
         const url =
-          `${CASE_ENDPOINT}?code=${encodeURIComponent(
-            code
-          )}`;
+          `${CASE_ENDPOINT}?code=${encodeURIComponent(code)}`;
 
-        const result =
+        const data =
           await apiRequest(url);
 
         const foundCase =
-          result?.case ||
-          result?.cases?.[0] ||
+          data?.case ||
+          data?.cases?.[0] ||
           null;
 
-        renderCase(foundCase);
+        renderTrackingCase(foundCase);
       } catch (error) {
         console.error(
-          "TRACKING ERROR:",
+          "Tracking error:",
           error
         );
 
-        showMessage(
-          trackingResult,
-          error.message ||
-            "خطا در دریافت وضعیت پرونده.",
-          "error"
-        );
+        if (trackingResult) {
+          trackingResult.innerHTML = `
+            <div class="tracking-empty error">
+              ${
+                escapeHtml(
+                  error.message ||
+                  "خطا در دریافت اطلاعات پرونده."
+                )
+              }
+            </div>
+          `;
+        }
       } finally {
-        if (button) {
-          button.disabled = false;
-          button.textContent =
-            button.dataset.originalText ||
-            "پیگیری";
+        if (submitButton) {
+          submitButton.disabled = false;
+          submitButton.textContent = originalText;
         }
       }
-    }
-  );
+    });
+  }
+
+  /* =========================
+     PHONE INPUT
+  ========================= */
+
+  const phoneInput = $("#requestPhone");
+
+  if (phoneInput) {
+    phoneInput.addEventListener("input", () => {
+      phoneInput.value =
+        phoneInput.value.replace(/[^\d+\-\s]/g, "");
+    });
+  }
 
   /* =========================
      SMOOTH SCROLL
   ========================= */
 
-  $$('a[href^="#"]').forEach(
-    (link) => {
-      link.addEventListener(
-        "click",
-        (event) => {
-          const targetId =
-            link.getAttribute("href");
+  $$('a[href^="#"]').forEach((link) => {
+    link.addEventListener("click", (event) => {
+      const targetId =
+        link.getAttribute("href");
 
-          if (
-            !targetId ||
-            targetId === "#"
-          ) {
-            return;
-          }
-
-          const target =
-            document.querySelector(
-              targetId
-            );
-
-          if (!target) return;
-
-          event.preventDefault();
-
-          target.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
-
-          /*
-           * اگر منوی موبایل در CSS/HTML
-           * وجود داشته باشد، بسته شود.
-           */
-          document.body.classList.remove(
-            "menu-open"
-          );
-        }
-      );
-    }
-  );
-
-  /* =========================
-     MOBILE MENU
-  ========================= */
-
-  const menuButton =
-    $("#mobileMenuButton");
-
-  const mobileMenu =
-    $("#mobileMenu");
-
-  menuButton?.addEventListener(
-    "click",
-    () => {
-      mobileMenu?.classList.toggle(
-        "open"
-      );
-
-      document.body.classList.toggle(
-        "menu-open"
-      );
-    }
-  );
-
-  /* =========================
-     PHONE NUMBER
-  ========================= */
-
-  $$(
-    'input[type="tel"], input[name="phone"]'
-  ).forEach((input) => {
-    input.addEventListener(
-      "input",
-      () => {
-        input.value =
-          input.value.replace(
-            /[^0-9+\-\s()]/g,
-            ""
-          );
+      if (
+        !targetId ||
+        targetId === "#" ||
+        targetId.length < 2
+      ) {
+        return;
       }
-    );
+
+      const target =
+        document.querySelector(targetId);
+
+      if (!target) return;
+
+      event.preventDefault();
+
+      target.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
   });
 
   /* =========================
-     API STATUS
+     API HEALTH CHECK
   ========================= */
 
   async function checkApi() {
     try {
-      const result =
-        await fetch(
-          `${API_BASE}/api/health`,
-          {
-            method: "GET",
-            headers: {
-              Accept:
-                "application/json",
-            },
-          }
-        );
+      const response =
+        await fetch(`${API_BASE}/health`, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+        });
 
-      if (!result.ok) {
-        throw new Error(
-          "API unavailable"
-        );
+      if (!response.ok) {
+        throw new Error("API unavailable");
       }
 
-      return true;
+      const data =
+        await response.json();
+
+      console.log(
+        "MotoClinic API:",
+        data
+      );
+
+      document.documentElement.dataset.api =
+        "online";
     } catch (error) {
       console.warn(
         "MotoClinic API is currently unavailable.",
         error
       );
 
-      return false;
+      document.documentElement.dataset.api =
+        "offline";
     }
   }
 
   /* =========================
-     INITIALIZATION
+     PUBLIC API
   ========================= */
 
   window.MotoClinic = {
@@ -664,9 +571,4 @@
   };
 
   checkApi();
-
-  console.log(
-    "MotoClinic Public Website initialized:",
-    API_BASE
-  );
 })();
