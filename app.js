@@ -40,7 +40,7 @@ function showMessage(message, error = false) {
 
   app.prepend(box);
 
-  setTimeout(() => box.remove(), 4000);
+  setTimeout(() => box.remove(), 5000);
 }
 
 function statusText(status) {
@@ -70,25 +70,52 @@ function priorityText(priority) {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    }
-  });
 
-  const data = await response.json().catch(() => ({}));
+  const separator = path.includes("?") ? "&" : "?";
+
+  const response = await fetch(
+    `${API_URL}${path}${separator}_v=6`,
+    {
+      ...options,
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {})
+      }
+    }
+  );
+
+  const text = await response.text();
+
+  let data = {};
+
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = {
+      error: text || "پاسخ نامعتبر از سرور"
+    };
+  }
 
   if (!response.ok) {
-    throw new Error(data.error || data.message || "خطای سرور");
+    throw new Error(
+      data.error ||
+      data.message ||
+      `خطای سرور (${response.status})`
+    );
   }
 
   return data;
 }
 
+/* =========================
+   DASHBOARD
+========================= */
+
 async function loadDashboard() {
+
   try {
+
     const data = await api("/dashboard");
 
     app.innerHTML = `
@@ -100,11 +127,11 @@ async function loadDashboard() {
         direction:rtl;
       ">
 
-        <h1 style="margin-bottom:5px;">
+        <h1>
           🏍️ موتو کلینیک ولیعصر (عج)
         </h1>
 
-        <p style="color:#666;margin-top:0;">
+        <p style="color:#666;">
           سیستم هوشمند مدیریت تعمیرگاه موتورسیکلت
         </p>
 
@@ -118,19 +145,25 @@ async function loadDashboard() {
           <div style="padding:18px;border-radius:12px;background:#f5f5f5;text-align:center;">
             <div style="font-size:28px;">👤</div>
             <div>مشتریان</div>
-            <strong style="font-size:24px;">${data.customers}</strong>
+            <strong style="font-size:24px;">
+              ${data.customers}
+            </strong>
           </div>
 
           <div style="padding:18px;border-radius:12px;background:#f5f5f5;text-align:center;">
             <div style="font-size:28px;">🏍️</div>
             <div>موتورسیکلت‌ها</div>
-            <strong style="font-size:24px;">${data.motorcycles}</strong>
+            <strong style="font-size:24px;">
+              ${data.motorcycles}
+            </strong>
           </div>
 
           <div style="padding:18px;border-radius:12px;background:#f5f5f5;text-align:center;">
             <div style="font-size:28px;">🔧</div>
             <div>پرونده‌های فعال</div>
-            <strong style="font-size:24px;">${data.activeCases}</strong>
+            <strong style="font-size:24px;">
+              ${data.activeCases}
+            </strong>
           </div>
 
           <div style="padding:18px;border-radius:12px;background:#f5f5f5;text-align:center;">
@@ -201,26 +234,36 @@ async function loadDashboard() {
         text-align:center;
         padding:50px 20px;
       ">
+
         <h2>❌ خطا در اتصال به سیستم</h2>
+
         <p>${error.message}</p>
 
         <button onclick="loadDashboard()" style="${buttonStyle}">
           🔄 تلاش مجدد
         </button>
+
       </div>
     `;
   }
 }
 
+/* =========================
+   CASE LIST
+========================= */
+
 async function loadCases() {
+
   const container = document.getElementById("cases");
 
   if (!container) return;
 
   try {
+
     const cases = await api("/cases");
 
     if (!cases.length) {
+
       container.innerHTML = `
         <div style="
           padding:20px;
@@ -230,6 +273,7 @@ async function loadCases() {
           هنوز پرونده‌ای ثبت نشده است.
         </div>
       `;
+
       return;
     }
 
@@ -291,6 +335,10 @@ async function loadCases() {
   }
 }
 
+/* =========================
+   CUSTOMER
+========================= */
+
 function showCustomerForm() {
 
   const forms = document.getElementById("forms");
@@ -317,15 +365,20 @@ function showCustomerForm() {
         placeholder="آدرس"
         style="${inputStyle}">
 
-      <textarea id="customerNotes"
+      <textarea
+        id="customerNotes"
         placeholder="یادداشت"
-        style="${inputStyle};min-height:80px;"></textarea>
+        style="${inputStyle};min-height:80px;"
+      ></textarea>
 
       <button onclick="saveCustomer()" style="${buttonStyle}">
         💾 ذخیره مشتری
       </button>
 
-      <button onclick="closeForms()" style="${buttonStyle};background:#777;">
+      <button
+        onclick="closeForms()"
+        style="${buttonStyle};background:#777;"
+      >
         بستن
       </button>
 
@@ -335,13 +388,25 @@ function showCustomerForm() {
 
 async function saveCustomer() {
 
-  const name = document.getElementById("customerName").value.trim();
-  const phone = document.getElementById("customerPhone").value.trim();
-  const address = document.getElementById("customerAddress").value.trim();
-  const notes = document.getElementById("customerNotes").value.trim();
+  const name =
+    document.getElementById("customerName").value.trim();
+
+  const phone =
+    document.getElementById("customerPhone").value.trim();
+
+  const address =
+    document.getElementById("customerAddress").value.trim();
+
+  const notes =
+    document.getElementById("customerNotes").value.trim();
 
   if (!name || !phone) {
-    showMessage("نام و شماره تماس الزامی است.", true);
+
+    showMessage(
+      "نام و شماره تماس الزامی است.",
+      true
+    );
+
     return;
   }
 
@@ -359,7 +424,9 @@ async function saveCustomer() {
 
     await loadDashboard();
 
-    showMessage("✅ مشتری با موفقیت ثبت شد.");
+    showMessage(
+      "✅ مشتری با موفقیت ثبت شد."
+    );
 
   } catch (error) {
 
@@ -369,6 +436,10 @@ async function saveCustomer() {
     );
   }
 }
+
+/* =========================
+   MOTORCYCLE
+========================= */
 
 async function showMotorcycleForm() {
 
@@ -388,8 +459,14 @@ async function showMotorcycleForm() {
 
         <h3>🏍️ ثبت موتورسیکلت</h3>
 
-        <select id="motorCustomer" style="${inputStyle}">
-          <option value="">انتخاب مشتری</option>
+        <select
+          id="motorCustomer"
+          style="${inputStyle}"
+        >
+
+          <option value="">
+            انتخاب مشتری
+          </option>
 
           ${customers.map(c => `
             <option value="${c.id}">
@@ -399,42 +476,62 @@ async function showMotorcycleForm() {
 
         </select>
 
-        <input id="motorPlate"
+        <input
+          id="motorPlate"
           placeholder="پلاک"
-          style="${inputStyle}">
+          style="${inputStyle}"
+        >
 
-        <input id="motorBrand"
+        <input
+          id="motorBrand"
           placeholder="برند"
-          style="${inputStyle}">
+          style="${inputStyle}"
+        >
 
-        <input id="motorModel"
+        <input
+          id="motorModel"
           placeholder="مدل"
-          style="${inputStyle}">
+          style="${inputStyle}"
+        >
 
-        <input id="motorYear"
+        <input
+          id="motorYear"
           placeholder="سال"
           type="number"
-          style="${inputStyle}">
+          style="${inputStyle}"
+        >
 
-        <input id="motorColor"
+        <input
+          id="motorColor"
           placeholder="رنگ"
-          style="${inputStyle}">
+          style="${inputStyle}"
+        >
 
-        <input id="motorVin"
+        <input
+          id="motorVin"
           placeholder="VIN / شماره شاسی"
-          style="${inputStyle}">
+          style="${inputStyle}"
+        >
 
-        <input id="motorMileage"
+        <input
+          id="motorMileage"
           placeholder="کارکرد"
           type="number"
           value="0"
-          style="${inputStyle}">
+          style="${inputStyle}"
+        >
 
-        <button onclick="saveMotorcycle()" style="${buttonStyle}">
+        <button
+          onclick="saveMotorcycle()"
+          style="${buttonStyle}"
+        >
           💾 ذخیره موتورسیکلت
         </button>
 
-        <button onclick="closeForms()" style="${buttonStyle};background:#777;">
+        <button
+          onclick="closeForms()"
+          style="${buttonStyle};background:#777;"
+        >
           بستن
         </button>
 
@@ -477,10 +574,12 @@ async function saveMotorcycle() {
     document.getElementById("motorMileage").value;
 
   if (!customer_id || !plate) {
+
     showMessage(
       "انتخاب مشتری و وارد کردن پلاک الزامی است.",
       true
     );
+
     return;
   }
 
@@ -496,13 +595,17 @@ async function saveMotorcycle() {
         year: yearValue ? Number(yearValue) : null,
         color,
         vin,
-        mileage: mileageValue ? Number(mileageValue) : 0
+        mileage: mileageValue
+          ? Number(mileageValue)
+          : 0
       })
     });
 
     await loadDashboard();
 
-    showMessage("✅ موتورسیکلت با موفقیت ثبت شد.");
+    showMessage(
+      "✅ موتورسیکلت با موفقیت ثبت شد."
+    );
 
   } catch (error) {
 
@@ -512,6 +615,10 @@ async function saveMotorcycle() {
     );
   }
 }
+
+/* =========================
+   CASE FORM
+========================= */
 
 async function showCaseForm() {
 
@@ -538,7 +645,10 @@ async function showCaseForm() {
           onchange="loadCustomerMotorcycles()"
           style="${inputStyle}"
         >
-          <option value="">انتخاب مشتری</option>
+
+          <option value="">
+            انتخاب مشتری
+          </option>
 
           ${customers.map(c => `
             <option value="${c.id}">
@@ -554,9 +664,11 @@ async function showCaseForm() {
           id="caseMotorcycle"
           style="${inputStyle}"
         >
+
           <option value="">
             ابتدا مشتری را انتخاب کنید
           </option>
+
         </select>
 
         <textarea
@@ -571,18 +683,40 @@ async function showCaseForm() {
           style="${inputStyle};min-height:80px;"
         ></textarea>
 
-        <select id="casePriority" style="${inputStyle}">
-          <option value="NORMAL">اولویت عادی</option>
-          <option value="LOW">اولویت کم</option>
-          <option value="HIGH">اولویت زیاد</option>
-          <option value="URGENT">فوری</option>
+        <select
+          id="casePriority"
+          style="${inputStyle}"
+        >
+
+          <option value="NORMAL">
+            اولویت عادی
+          </option>
+
+          <option value="LOW">
+            اولویت کم
+          </option>
+
+          <option value="HIGH">
+            اولویت زیاد
+          </option>
+
+          <option value="URGENT">
+            فوری
+          </option>
+
         </select>
 
-        <button onclick="saveCase()" style="${buttonStyle}">
+        <button
+          onclick="saveCase()"
+          style="${buttonStyle}"
+        >
           💾 ثبت پرونده
         </button>
 
-        <button onclick="closeForms()" style="${buttonStyle};background:#777;">
+        <button
+          onclick="closeForms()"
+          style="${buttonStyle};background:#777;"
+        >
           بستن
         </button>
 
@@ -635,7 +769,9 @@ async function loadCustomerMotorcycles() {
 
     select.innerHTML = motorcycles.map(m => `
       <option value="${m.id}">
-        ${m.brand || ""} ${m.model || ""} — پلاک ${m.plate}
+        ${m.brand || ""}
+        ${m.model || ""}
+        — پلاک ${m.plate}
       </option>
     `).join("");
 
@@ -690,7 +826,9 @@ async function saveCase() {
 
     await loadDashboard();
 
-    showMessage("✅ پرونده تعمیر با موفقیت ثبت شد.");
+    showMessage(
+      "✅ پرونده تعمیر با موفقیت ثبت شد."
+    );
 
   } catch (error) {
 
@@ -700,6 +838,10 @@ async function saveCase() {
     );
   }
 }
+
+/* =========================
+   CASE DETAIL
+========================= */
 
 async function openCase(caseId) {
 
@@ -722,7 +864,10 @@ async function openCase(caseId) {
         <h2>📋 جزئیات پرونده</h2>
 
         <p>
-          👤 <strong>${item.customer_name || "-"}</strong>
+          👤
+          <strong>
+            ${item.customer_name || "-"}
+          </strong>
         </p>
 
         <p>
@@ -747,7 +892,16 @@ async function openCase(caseId) {
 
         <p>
           اولویت:
-          <strong>${priorityText(item.priority)}</strong>
+          <strong>
+            ${priorityText(item.priority)}
+          </strong>
+        </p>
+
+        <p>
+          وضعیت فعلی:
+          <strong>
+            ${statusText(item.status)}
+          </strong>
         </p>
 
         <hr>
@@ -804,6 +958,7 @@ async function openCase(caseId) {
         </select>
 
         <button
+          id="saveStatusButton"
           onclick="changeCaseStatus('${caseId}')"
           style="${buttonStyle}"
         >
@@ -834,34 +989,96 @@ async function openCase(caseId) {
   }
 }
 
+/* =========================
+   CHANGE STATUS
+========================= */
+
 async function changeCaseStatus(caseId) {
 
+  const select =
+    document.getElementById("caseStatus");
+
+  const button =
+    document.getElementById("saveStatusButton");
+
+  if (!select) {
+
+    showMessage(
+      "❌ کنترل وضعیت پرونده پیدا نشد.",
+      true
+    );
+
+    return;
+  }
+
   const status =
-    document.getElementById("caseStatus").value;
+    select.value.trim().toUpperCase();
+
+  if (!status) {
+
+    showMessage(
+      "❌ وضعیت پرونده انتخاب نشده است.",
+      true
+    );
+
+    return;
+  }
 
   try {
 
-    await api(`/cases/${caseId}/status`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        status
-      })
-    });
+    if (button) {
+      button.disabled = true;
+      button.textContent = "⏳ در حال ذخیره...";
+    }
+
+    const result =
+      await api(`/cases/${caseId}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status
+        })
+      });
+
+    if (
+      !result ||
+      result.ok !== true ||
+      !result.case
+    ) {
+      throw new Error(
+        "سرور پاسخ معتبر برای تغییر وضعیت برنگرداند."
+      );
+    }
+
+    if (result.case.status !== status) {
+      throw new Error(
+        "سرور وضعیت جدید را تأیید نکرد."
+      );
+    }
 
     await loadDashboard();
 
     showMessage(
-      "✅ وضعیت پرونده با موفقیت تغییر کرد."
+      `✅ وضعیت پرونده به «${statusText(status)}» تغییر کرد.`
     );
 
   } catch (error) {
 
+    if (button) {
+      button.disabled = false;
+      button.textContent = "💾 ذخیره وضعیت";
+    }
+
     showMessage(
-      "❌ خطا در تغییر وضعیت پرونده: " + error.message,
+      "❌ خطا در تغییر وضعیت پرونده: " +
+      error.message,
       true
     );
   }
 }
+
+/* =========================
+   CLOSE FORMS
+========================= */
 
 function closeForms() {
 
@@ -872,5 +1089,9 @@ function closeForms() {
     forms.innerHTML = "";
   }
 }
+
+/* =========================
+   START
+========================= */
 
 loadDashboard();
