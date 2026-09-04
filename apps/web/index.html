@@ -4,36 +4,689 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <title>موتو کلینیک ولیعصر (عج)</title>
+  <title>موتوکلینیک ولیعصر(عج) | تعمیر و سرویس تخصصی موتورسیکلت</title>
 
   <meta
     name="description"
-    content="نرم‌افزار هوشمند مدیریت تعمیرگاه موتورسیکلت موتو کلینیک ولیعصر (عج)"
+    content="موتوکلینیک ولیعصر(عج)؛ سرویس، تعمیر، عیب‌یابی و نگهداری تخصصی موتورسیکلت"
   >
 
-  <style>
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      background: #f4f5f7;
-    }
-
-    button {
-      font-family: inherit;
-    }
-  </style>
+  <link rel="stylesheet" href="./style.css">
 </head>
 
 <body>
 
-  <main id="app">
-    <p style="font-family:Tahoma; text-align:center; padding:40px;">
-      در حال بارگذاری موتو کلینیک...
-    </p>
+  <!-- ================= HEADER ================= -->
+
+  <header class="site-header">
+
+    <div class="container header-inner">
+
+      <a href="#home" class="brand">
+
+        <div class="brand-mark">
+          MC
+        </div>
+
+        <div class="brand-text">
+          <strong>موتوکلینیک</strong>
+          <span>ولیعصر(عج)</span>
+        </div>
+
+      </a>
+
+      <nav class="main-nav">
+
+        <a href="#home">خانه</a>
+        <a href="#services">خدمات</a>
+        <a href="#products">محصولات</a>
+        <a href="#tracking">پیگیری تعمیر</a>
+        <a href="#about">درباره ما</a>
+
+      </nav>
+
+      <button
+        type="button"
+        class="header-request-btn"
+        id="openRequestBtn"
+      >
+        درخواست سرویس
+      </button>
+
+    </div>
+
+  </header>
+
+
+  <!-- ================= MAIN ================= -->
+
+  <main>
+
+    <!-- ================= HERO ================= -->
+
+    <section class="hero" id="home">
+
+      <div class="container hero-grid">
+
+        <div class="hero-content">
+
+          <div class="hero-badge">
+            مرکز تخصصی سرویس و تعمیر موتورسیکلت
+          </div>
+
+          <h1>
+            موتورت رو
+            <span>به متخصص بسپار</span>
+          </h1>
+
+          <p>
+            سرویس، تعمیر، عیب‌یابی و نگهداری موتورسیکلت
+            با رویکرد دقیق، حرفه‌ای و شفاف.
+          </p>
+
+          <div class="hero-actions">
+
+            <button
+              type="button"
+              class="primary-btn"
+              id="requestServiceBtn"
+            >
+              درخواست سرویس
+            </button>
+
+            <a href="#tracking" class="secondary-btn">
+              پیگیری تعمیر
+            </a>
+
+          </div>
+
+          <div class="hero-features">
+
+            <div>
+              <strong>01</strong>
+              <span>عیب‌یابی دقیق</span>
+            </div>
+
+            <div>
+              <strong>02</strong>
+              <span>تعمیر تخصصی</span>
+            </div>
+
+            <div>
+              <strong>03</strong>
+              <span>پیگیری آنلاین</span>
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <div class="hero-visual">
+
+          <div class="hero-bike-card">
+
+            <div class="hero-bike-placeholder">
+              <span>🏍️</span>
+              <small>MOTO CLINIC</small>
+            </div>
+
+            <div class="hero-card-info">
+
+              <span>سرویس تخصصی</span>
+
+              <strong>
+                مراقبت حرفه‌ای از موتور شما
+              </strong>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- ================= QUICK INFO ================= -->
+
+    <section class="quick-info">
+
+      <div class="container quick-info-grid">
+
+        <div class="quick-item">
+          <strong>تخصص</strong>
+          <span>خدمات تخصصی موتورسیکلت</span>
+        </div>
+
+        <div class="quick-item">
+          <strong>شفافیت</strong>
+          <span>اعلام وضعیت و هزینه تعمیر</span>
+        </div>
+
+        <div class="quick-item">
+          <strong>پیگیری</strong>
+          <span>امکان پیگیری وضعیت پذیرش</span>
+        </div>
+
+        <div class="quick-item">
+          <strong>اعتماد</strong>
+          <span>سرویس اصولی و مسئولانه</span>
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- ================= SERVICES ================= -->
+
+    <section class="section services-section" id="services">
+
+      <div class="container">
+
+        <div class="section-heading">
+
+          <div>
+            <span class="section-kicker">
+              خدمات موتوکلینیک
+            </span>
+
+            <h2>
+              هر چیزی که موتورت نیاز دارد
+            </h2>
+          </div>
+
+          <p>
+            خدمات تعمیر و نگهداری را از پذیرش تا تحویل،
+            منظم و حرفه‌ای دنبال می‌کنیم.
+          </p>
+
+        </div>
+
+
+        <div
+          class="services-grid"
+          id="servicesGrid"
+        >
+
+          <!-- توسط app.js تکمیل می‌شود -->
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- ================= PRODUCTS ================= -->
+
+    <section class="section products-section" id="products">
+
+      <div class="container">
+
+        <div class="section-heading">
+
+          <div>
+
+            <span class="section-kicker">
+              فروشگاه
+            </span>
+
+            <h2>
+              محصولات پیشنهادی موتوکلینیک
+            </h2>
+
+          </div>
+
+          <p>
+            فضای اختصاصی برای معرفی روغن، قطعات،
+            مواد مصرفی و محصولات منتخب.
+          </p>
+
+        </div>
+
+
+        <div class="products-grid">
+
+          <article class="product-card">
+
+            <div class="product-image">
+              <span>PRODUCT</span>
+            </div>
+
+            <div class="product-content">
+
+              <span class="product-label">
+                روغن موتور
+              </span>
+
+              <h3>
+                محصولات تخصصی موتور
+              </h3>
+
+              <p>
+                مناسب برای سرویس و نگهداری اصولی موتورسیکلت.
+              </p>
+
+            </div>
+
+          </article>
+
+
+          <article class="product-card">
+
+            <div class="product-image">
+              <span>PRODUCT</span>
+            </div>
+
+            <div class="product-content">
+
+              <span class="product-label">
+                مصرفی
+              </span>
+
+              <h3>
+                مواد مصرفی و نگهداری
+              </h3>
+
+              <p>
+                محصولات کاربردی برای افزایش عمر و عملکرد بهتر موتور.
+              </p>
+
+            </div>
+
+          </article>
+
+
+          <article class="product-card">
+
+            <div class="product-image">
+              <span>PRODUCT</span>
+            </div>
+
+            <div class="product-content">
+
+              <span class="product-label">
+                قطعات
+              </span>
+
+              <h3>
+                قطعات و تجهیزات
+              </h3>
+
+              <p>
+                فضای اختصاصی برای معرفی قطعات و تجهیزات منتخب.
+              </p>
+
+            </div>
+
+          </article>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- ================= VIDEO / AD ================= -->
+
+    <section class="section media-section">
+
+      <div class="container">
+
+        <div class="media-card">
+
+          <div class="media-content">
+
+            <span class="section-kicker">
+              تبلیغات و ویدئو
+            </span>
+
+            <h2>
+              جای محصولات و ویدئوهای تبلیغاتی شما اینجاست
+            </h2>
+
+            <p>
+              این بخش بعداً برای کلیپ‌های معرفی خدمات،
+              محصولات جدید، تخفیف‌ها و محتوای تبلیغاتی
+              استفاده خواهد شد.
+            </p>
+
+          </div>
+
+          <div class="video-placeholder">
+
+            <div class="play-button">
+              ▶
+            </div>
+
+            <span>
+              VIDEO / PROMOTION
+            </span>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- ================= TRACKING ================= -->
+
+    <section class="section tracking-section" id="tracking">
+
+      <div class="container">
+
+        <div class="tracking-box">
+
+          <div class="tracking-heading">
+
+            <span class="section-kicker">
+              پیگیری آنلاین
+            </span>
+
+            <h2>
+              وضعیت تعمیر موتورت رو ببین
+            </h2>
+
+            <p>
+              کد پذیرش خود را وارد کنید تا وضعیت پرونده
+              نمایش داده شود.
+            </p>
+
+          </div>
+
+
+          <form
+            id="trackingForm"
+            class="tracking-form"
+            data-form="tracking"
+          >
+
+            <input
+              type="text"
+              name="code"
+              id="trackingCode"
+              placeholder="مثلاً MC-1001"
+              autocomplete="off"
+            >
+
+            <button type="submit">
+              پیگیری وضعیت
+            </button>
+
+          </form>
+
+
+          <div
+            id="trackingResult"
+            class="tracking-result"
+            hidden
+          ></div>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- ================= ABOUT ================= -->
+
+    <section class="section about-section" id="about">
+
+      <div class="container about-grid">
+
+        <div>
+
+          <span class="section-kicker">
+            درباره موتوکلینیک
+          </span>
+
+          <h2>
+            تعمیرگاه فقط محل تعمیر نیست؛
+            محل اعتماد شماست.
+          </h2>
+
+        </div>
+
+        <div>
+
+          <p>
+            موتوکلینیک ولیعصر(عج) با هدف ارائه خدمات
+            منظم، تخصصی و شفاف برای موتورسواران ایجاد شده است.
+          </p>
+
+          <p>
+            هدف ما این است که مشتری بداند موتورش در چه
+            مرحله‌ای قرار دارد، چه کاری روی آن انجام شده
+            و هزینه‌ها بابت چه چیزی پرداخت می‌شوند.
+          </p>
+
+        </div>
+
+      </div>
+
+    </section>
+
   </main>
+
+
+  <!-- ================= FOOTER ================= -->
+
+  <footer class="site-footer">
+
+    <div class="container footer-grid">
+
+      <div>
+
+        <div class="footer-brand">
+          <strong>موتوکلینیک</strong>
+          <span>ولیعصر(عج)</span>
+        </div>
+
+        <p>
+          مرکز تخصصی سرویس و تعمیر موتورسیکلت
+        </p>
+
+      </div>
+
+
+      <div>
+
+        <h3>دسترسی سریع</h3>
+
+        <a href="#services">خدمات</a>
+        <a href="#products">محصولات</a>
+        <a href="#tracking">پیگیری تعمیر</a>
+
+      </div>
+
+
+      <div>
+
+        <h3>تماس</h3>
+
+        <p>
+          برای دریافت خدمات و هماهنگی پذیرش
+          با موتوکلینیک تماس بگیرید.
+        </p>
+
+        <button
+          type="button"
+          class="footer-request"
+          data-action="open-request"
+        >
+          درخواست سرویس
+        </button>
+
+      </div>
+
+    </div>
+
+
+    <div class="container footer-bottom">
+
+      <span>
+        © موتوکلینیک ولیعصر(عج)
+      </span>
+
+      <span>
+        طراحی و توسعه سیستم هوشمند موتوکلینیک
+      </span>
+
+    </div>
+
+  </footer>
+
+
+  <!-- ================= REQUEST MODAL ================= -->
+
+  <div
+    class="modal-overlay"
+    id="requestModal"
+    hidden
+  >
+
+    <div class="request-modal">
+
+      <button
+        type="button"
+        class="modal-close"
+        data-action="close-request"
+        aria-label="بستن"
+      >
+        ×
+      </button>
+
+
+      <div class="modal-heading">
+
+        <span class="section-kicker">
+          درخواست سرویس
+        </span>
+
+        <h2>
+          مشخصات موتورت رو وارد کن
+        </h2>
+
+        <p>
+          اطلاعات را ثبت کن تا برای هماهنگی سرویس
+          با شما تماس بگیریم.
+        </p>
+
+      </div>
+
+
+      <form
+        id="requestForm"
+        data-form="service-request"
+      >
+
+        <div class="form-row">
+
+          <div class="form-field">
+
+            <label for="customerName">
+              نام و نام خانوادگی
+            </label>
+
+            <input
+              type="text"
+              id="customerName"
+              name="name"
+              placeholder="نام شما"
+              required
+            >
+
+          </div>
+
+
+          <div class="form-field">
+
+            <label for="customerPhone">
+              شماره تماس
+            </label>
+
+            <input
+              type="tel"
+              id="customerPhone"
+              name="phone"
+              placeholder="09xxxxxxxxx"
+              required
+            >
+
+          </div>
+
+        </div>
+
+
+        <div class="form-field">
+
+          <label for="motorcycle">
+            موتورسیکلت
+          </label>
+
+          <input
+            type="text"
+            id="motorcycle"
+            name="motorcycle"
+            placeholder="مثلاً هوندا ۱۲۵"
+          >
+
+        </div>
+
+
+        <div class="form-field">
+
+          <label for="problem">
+            مشکل یا درخواست شما
+          </label>
+
+          <textarea
+            id="problem"
+            name="problem"
+            rows="4"
+            placeholder="مشکل موتور یا نوع سرویس موردنیاز را بنویسید..."
+          ></textarea>
+
+        </div>
+
+
+        <button
+          type="submit"
+          class="primary-btn modal-submit"
+        >
+          ارسال درخواست
+        </button>
+
+      </form>
+
+    </div>
+
+  </div>
+
+
+  <!-- ================= FLOATING REQUEST ================= -->
+
+  <button
+    type="button"
+    class="floating-request"
+    data-action="open-request"
+    aria-label="درخواست سرویس"
+  >
+    <span>+</span>
+    <small>درخواست سرویس</small>
+  </button>
+
+
+  <!-- ================= JAVASCRIPT ================= -->
 
   <script src="./app.js"></script>
 
