@@ -1,735 +1,1190 @@
-(() => {
-  "use strict";
+'use strict';
 
-  const API_BASE =
-    window.MOTOCLINIC_API_URL ||
-    (window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1"
-      ? "http://localhost:4000"
-      : "https://motoclinic-api.onrender.com");
+/* =========================
+   MOTO CLINIC CORE
+   Reception + Appointments
+   Check-in / Check-out
+   Roles + Workshop
+   ========================= */
 
-  const REQUEST_ENDPOINT =
-    `${API_BASE}/api/customer-requests`;
+const API =
+  window.__API_URL__ ||
+  localStorage.getItem('motoclinic_api_url') ||
+  '';
 
-  const CASE_ENDPOINT =
-    `${API_BASE}/api/cases`;
+const TOKEN_KEY = 'motoclinic_token';
+const USER_KEY = 'motoclinic_user';
 
-  const $ = (selector) =>
-    document.querySelector(selector);
+let state = {
+  user: null,
+  cases: [],
+  appointments: [],
+  customers: [],
+  motorcycles: []
+};
 
-  const $$ = (selector) =>
-    document.querySelectorAll(selector);
+/* ---------- Helpers ---------- */
 
-  const clean = (value) =>
-    String(value ?? "").trim();
+function token() {
+  return localStorage.getItem(TOKEN_KEY) || '';
+}
 
-  function escapeHtml(value) {
-    return String(value ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
+function authHeaders() {
+  const t = token();
+  return t
+    ? {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${t}`
+      }
+    : {
+        'Content-Type': 'application/json'
+      };
+}
+
+function esc(v) {
+  return String(v ?? '').replace(/[&<>'"]/g, m => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    "'": '&#39;',
+    '"': '&quot;'
+  }[m]));
+}
+
+function money(v) {
+  return Number(v || 0).toLocaleString('fa-IR');
+}
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function showToast(message) {
+  let el = document.getElementById('toast');
+
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'toast';
+    el.style.cssText =
+      'position:fixed;bottom:25px;right:25px;z-index:9999;' +
+      'background:#111;color:#fff;padding:13px 18px;' +
+      'border-radius:12px;font-size:13px;box-shadow:0 8px 30px #0003';
+    document.body.appendChild(el);
   }
 
-  async function apiRequest(url, options = {}) {
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-      },
+  el.textContent = message;
+  el.style.display = 'block';
+
+  clearTimeout(window.__toastTimer);
+
+  window.__toastTimer = setTimeout(() => {
+    el.style.display = 'none';
+  }, 2200);
+}
+
+async function api(path, options = {}) {
+  if (!API) {
+    throw new Error('API URL تنظیم نشده است');
+  }
+
+  const response = await fetch(API.replace(/\/$/, '') + path, {
+    ...options,
+    headers: {
+      ...authHeaders(),
+      ...(options.headers || {})
+    }
+  });
+
+  let data = {};
+
+  try {
+    data = await response.json();
+  } catch (_) {}
+
+  if (!response.ok) {
+    throw new Error(
+      data.message ||
+      data.error ||
+      `خطای سرور: ${response.status}`
+    );
+  }
+
+  return data;
+}
+
+/* ---------- Session ---------- */
+
+function saveSession(user, jwt) {
+  state.user = user || null;
+
+  if (jwt) {
+    localStorage.setItem(TOKEN_KEY, jwt);
+  }
+
+  if (user) {
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+  }
+}
+
+function loadSession() {
+  try {
+    state.user = JSON.parse(
+      localStorage.getItem(USER_KEY) || 'null'
+    );
+  } catch (_) {
+    state.user = null;
+  }
+}
+
+function logout() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+
+  state.user = null;
+
+  location.reload();
+}
+
+/* ---------- Roles ---------- */
+
+function role() {
+  const r =
+    state.user?.role ||
+    state.user?.userRole ||
+    state.user?.type ||
+    '';
+
+  return String(r).toLowerCase();
+}
+
+function isAdmin() {
+  return [
+    'admin',
+    'main_admin',
+    'مدیر اصلی',
+    'مدیرکل'
+  ].includes(role());
+}
+
+function isExecutive() {
+  return [
+    'executive',
+    'manager',
+    'executive_manager',
+    'مدیر اجرایی'
+  ].includes(role());
+}
+
+function isTechnician() {
+  return [
+    'technician',
+    'tech',
+    'تکنسین',
+    'تعمیرکار'
+  ].includes(role());
+}
+
+function canReception() {
+  return isAdmin() || isExecutive();
+}
+
+function canAppointments() {
+  return isAdmin() || isExecutive();
+}
+
+function canCheckInOut() {
+  return isAdmin() || isExecutive();
+}
+
+function canAssignTechnician() {
+  return isAdmin() || isExecutive();
+}
+
+/* ---------- Login ---------- */
+
+async function login(username, password) {
+  try {
+    const data = await api('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({
+        username,
+        password
+      })
     });
 
-    let data = null;
+    saveSession(
+      data.user || data.account || data.profile,
+      data.token || data.accessToken || data.jwt
+    );
 
-    try {
-      data = await response.json();
-    } catch {
-      data = null;
-    }
+    showToast('ورود موفق بود');
 
-    if (!response.ok) {
-      throw new Error(
-        data?.message ||
-        `خطای سرور (${response.status})`
+    await loadAll();
+
+    renderApp();
+
+    return true;
+  } catch (err) {
+    showToast(err.message || 'ورود ناموفق بود');
+    return false;
+  }
+}
+
+/* ---------- Data ---------- */
+
+async function loadAll() {
+  const requests = [];
+
+  const endpoints = [
+    ['/cases', 'cases'],
+    ['/appointments', 'appointments'],
+    ['/customers', 'customers'],
+    ['/motorcycles', 'motorcycles']
+  ];
+
+  for (const [endpoint, key] of endpoints) {
+    requests.push(
+      api(endpoint)
+        .then(data => {
+          state[key] =
+            data?.items ||
+            data?.data ||
+            data ||
+            [];
+        })
+        .catch(() => {
+          state[key] = [];
+        })
+    );
+  }
+
+  await Promise.all(requests);
+}
+
+/* ---------- Navigation ---------- */
+
+function navigate(page) {
+  document
+    .querySelectorAll('[data-page]')
+    .forEach(el => {
+      el.style.display =
+        el.dataset.page === page ? '' : 'none';
+    });
+
+  document
+    .querySelectorAll('[data-nav]')
+    .forEach(el => {
+      el.classList.toggle(
+        'active',
+        el.dataset.nav === page
       );
-    }
+    });
 
-    return data;
+  const renderers = {
+    dashboard: renderDashboard,
+    reception: renderReception,
+    appointments: renderAppointments,
+    workshop: renderWorkshop,
+    cases: renderCases,
+    technician: renderTechnician
+  };
+
+  if (renderers[page]) {
+    renderers[page]();
   }
+}
 
-  /* =========================================
-     REQUEST MODAL
-  ========================================= */
+/* ---------- Dashboard ---------- */
 
-  const requestModal =
-    $("#requestModal");
+function renderDashboard() {
+  const root =
+    document.querySelector('[data-page="dashboard"]');
 
-  const requestForm =
-    $("#requestForm");
+  if (!root) return;
 
-  const requestMessage =
-    $("#requestFormMessage");
-
-  function openRequestModal() {
-    if (!requestModal) {
-      console.error(
-        "requestModal not found"
-      );
-      return;
-    }
-
-    requestModal.classList.add("is-open");
-    requestModal.classList.add("active");
-
-    requestModal.setAttribute(
-      "aria-hidden",
-      "false"
-    );
-
-    requestModal.style.display = "flex";
-
-    document.body.classList.add(
-      "modal-open"
-    );
-
-    setTimeout(() => {
-      $("#requestName")?.focus();
-    }, 100);
-  }
-
-  function closeRequestModal() {
-    if (!requestModal) return;
-
-    requestModal.classList.remove("is-open");
-    requestModal.classList.remove("active");
-
-    requestModal.setAttribute(
-      "aria-hidden",
-      "true"
-    );
-
-    requestModal.style.display = "none";
-
-    document.body.classList.remove(
-      "modal-open"
-    );
-  }
-
-  /*
-   * هر دکمه‌ای که مربوط به درخواست سرویس باشد
-   * شناسایی می‌شود؛ حتی اگر ID متفاوت داشته باشد.
-   */
-
-  $$(
-    '[data-open-request], #openRequest, #heroRequestButton, #requestButton, #serviceRequest, .request-service-btn'
-  ).forEach((button) => {
-    button.addEventListener(
-      "click",
-      (event) => {
-        event.preventDefault();
-        openRequestModal();
-      }
-    );
-  });
-
-  /*
-   * دکمه‌های دارای متن «درخواست سرویس»
-   */
-
-  $$("button, a").forEach((element) => {
-    const text =
-      clean(element.textContent);
-
-    if (
-      text.includes("درخواست سرویس") &&
-      !element.dataset.requestBound
-    ) {
-      element.dataset.requestBound =
-        "true";
-
-      element.addEventListener(
-        "click",
-        (event) => {
-          event.preventDefault();
-          openRequestModal();
-        }
-      );
-    }
-  });
-
-  $$(
-    '[data-close-request], #closeRequest, #closeRequestModal, .modal-close'
-  ).forEach((button) => {
-    button.addEventListener(
-      "click",
-      (event) => {
-        event.preventDefault();
-        closeRequestModal();
-      }
-    );
-  });
-
-  if (requestModal) {
-    requestModal.addEventListener(
-      "click",
-      (event) => {
-        if (
-          event.target === requestModal
-        ) {
-          closeRequestModal();
-        }
-      }
-    );
-  }
-
-  document.addEventListener(
-    "keydown",
-    (event) => {
-      if (event.key === "Escape") {
-        closeRequestModal();
-      }
-    }
+  const activeCases = state.cases.filter(
+    c => c.status !== 'تحویل شده'
   );
 
-  /* =========================================
-     REQUEST FORM
-  ========================================= */
+  const readyCases = state.cases.filter(
+    c => c.status === 'آماده تحویل'
+  );
 
-  if (requestForm) {
-    requestForm.addEventListener(
-      "submit",
-      async (event) => {
-        event.preventDefault();
-
-        if (requestMessage) {
-          requestMessage.hidden = true;
-          requestMessage.textContent = "";
-        }
-
-        const name =
-          clean($("#requestName")?.value);
-
-        const phone =
-          clean($("#requestPhone")?.value);
-
-        const motorcycle =
-          clean(
-            $("#requestMotorcycle")?.value
-          );
-
-        const service =
-          clean(
-            $("#requestService")?.value
-          );
-
-        const description =
-          clean(
-            $("#requestDescription")?.value
-          );
-
-        if (!name) {
-          showFormMessage(
-            "لطفاً نام خود را وارد کنید.",
-            "error"
-          );
-          $("#requestName")?.focus();
-          return;
-        }
-
-        if (!phone) {
-          showFormMessage(
-            "لطفاً شماره تماس خود را وارد کنید.",
-            "error"
-          );
-          $("#requestPhone")?.focus();
-          return;
-        }
-
-        const digits =
-          phone.replace(/\D/g, "");
-
-        if (digits.length < 10) {
-          showFormMessage(
-            "شماره تماس واردشده معتبر نیست.",
-            "error"
-          );
-          $("#requestPhone")?.focus();
-          return;
-        }
-
-        const submitButton =
-          requestForm.querySelector(
-            'button[type="submit"]'
-          );
-
-        const originalText =
-          submitButton?.textContent ||
-          "ثبت درخواست";
-
-        if (submitButton) {
-          submitButton.disabled = true;
-          submitButton.textContent =
-            "در حال ثبت...";
-        }
-
-        try {
-          const data =
-            await apiRequest(
-              REQUEST_ENDPOINT,
-              {
-                method: "POST",
-                body: JSON.stringify({
-                  name,
-                  phone,
-                  motorcycle,
-                  service,
-                  description,
-                }),
-              }
-            );
-
-          if (data?.request) {
-            localStorage.setItem(
-              "motoclinic_last_request",
-              JSON.stringify(
-                data.request
-              )
-            );
-          }
-
-          showFormMessage(
-            data?.message ||
-              "درخواست شما با موفقیت ثبت شد.",
-            "success"
-          );
-
-          requestForm.reset();
-
-          setTimeout(() => {
-            closeRequestModal();
-          }, 1800);
-        } catch (error) {
-          console.error(
-            "Request error:",
-            error
-          );
-
-          showFormMessage(
-            error.message ||
-              "ثبت درخواست انجام نشد.",
-            "error"
-          );
-        } finally {
-          if (submitButton) {
-            submitButton.disabled = false;
-            submitButton.textContent =
-              originalText;
-          }
-        }
-      }
+  const todayAppointments =
+    state.appointments.filter(a =>
+      String(a.date || '').slice(0, 10) === today()
     );
-  }
 
-  function showFormMessage(
-    message,
-    type
-  ) {
-    if (!requestMessage) {
-      alert(message);
-      return;
-    }
+  root.innerHTML = `
+    <div class="mc-dashboard">
 
-    requestMessage.textContent =
-      message;
-
-    requestMessage.hidden = false;
-
-    requestMessage.className =
-      `site-message ${type}`;
-  }
-
-  /* =========================================
-     TRACKING
-  ========================================= */
-
-  const trackingForm =
-    $("#trackingForm");
-
-  const trackingResult =
-    $("#trackingResult");
-
-  function statusLabel(status) {
-    const value =
-      clean(status).toUpperCase();
-
-    const labels = {
-      RECEIVED: "دریافت موتور",
-      INSPECTION: "در حال بررسی",
-      DIAGNOSIS: "تشخیص عیب",
-      WAITING_APPROVAL:
-        "در انتظار تأیید",
-      APPROVED: "تأیید شده",
-      IN_PROGRESS: "در حال تعمیر",
-      WAITING_PART:
-        "در انتظار قطعه",
-      READY: "آماده تحویل",
-      DELIVERED: "تحویل شده",
-      COMPLETED: "تکمیل شده",
-      CANCELLED: "لغو شده",
-    };
-
-    return (
-      labels[value] ||
-      status ||
-      "نامشخص"
-    );
-  }
-
-  function renderTrackingCase(
-    caseData
-  ) {
-    if (!trackingResult) return;
-
-    if (!caseData) {
-      trackingResult.innerHTML = `
-        <div class="tracking-empty">
-          <strong>
-            پرونده‌ای پیدا نشد.
-          </strong>
-          <span>
-            کد پیگیری را بررسی کنید.
-          </span>
-        </div>
-      `;
-      return;
-    }
-
-    const motorcycle =
-      [
-        caseData.motorcycle_brand,
-        caseData.motorcycle_model,
-      ]
-        .filter(Boolean)
-        .join(" ");
-
-    const code =
-      caseData.code ||
-      caseData.case_code ||
-      caseData.id ||
-      "—";
-
-    const status =
-      statusLabel(
-        caseData.status
-      );
-
-    const customer =
-      caseData.customer_name ||
-      "مشتری";
-
-    const description =
-      caseData.description ||
-      "توضیحی ثبت نشده است.";
-
-    trackingResult.innerHTML = `
-      <div class="tracking-card">
-
-        <div class="tracking-card-head">
-
-          <div>
-            <small>
-              کد پیگیری
-            </small>
-
-            <strong>
-              ${escapeHtml(code)}
-            </strong>
-          </div>
-
-          <span class="tracking-status">
-            ${escapeHtml(status)}
-          </span>
-
+      <div class="mc-header">
+        <div>
+          <h1>موتوکلینیک</h1>
+          <p>سیستم مدیریت و اتوماسیون تعمیرگاه</p>
         </div>
 
-        <div class="tracking-info">
+        <div class="mc-user">
+          <b>${esc(
+            state.user?.name ||
+            state.user?.username ||
+            'کاربر'
+          )}</b>
+          <small>${esc(
+            state.user?.role || ''
+          )}</small>
+          <button onclick="logout()">خروج</button>
+        </div>
+      </div>
 
-          <div>
-            <span>مشتری</span>
-            <strong>
-              ${escapeHtml(customer)}
-            </strong>
-          </div>
+      <div class="mc-stats">
 
-          <div>
-            <span>موتورسیکلت</span>
-            <strong>
-              ${escapeHtml(
-                motorcycle || "ثبت نشده"
-              )}
-            </strong>
-          </div>
-
-          <div>
-            <span>وضعیت</span>
-            <strong>
-              ${escapeHtml(status)}
-            </strong>
-          </div>
-
-          <div>
-            <span>شرح</span>
-            <strong>
-              ${escapeHtml(description)}
-            </strong>
-          </div>
-
+        <div class="mc-stat">
+          <b>${activeCases.length}</b>
+          <span>داخل تعمیرگاه</span>
         </div>
 
+        <div class="mc-stat">
+          <b>${readyCases.length}</b>
+          <span>آماده تحویل</span>
+        </div>
+
+        <div class="mc-stat">
+          <b>${todayAppointments.length}</b>
+          <span>نوبت امروز</span>
+        </div>
+
+        <div class="mc-stat">
+          <b>${state.cases.length}</b>
+          <span>کل پرونده‌ها</span>
+        </div>
+
+      </div>
+
+      <div class="mc-actions">
+
+        ${
+          canReception()
+            ? `
+              <button onclick="navigate('reception')">
+                <strong>＋</strong>
+                پذیرش جدید
+                <small>ثبت مشتری و موتور</small>
+              </button>
+            `
+            : ''
+        }
+
+        ${
+          canAppointments()
+            ? `
+              <button onclick="navigate('appointments')">
+                <strong>📅</strong>
+                نوبت‌دهی
+                <small>مدیریت نوبت‌ها</small>
+              </button>
+            `
+            : ''
+        }
+
+        <button onclick="navigate('workshop')">
+          <strong>🔧</strong>
+          تعمیرگاه
+          <small>موتورهای داخل</small>
+        </button>
+
+        <button onclick="navigate('cases')">
+          <strong>📋</strong>
+          پرونده‌ها
+          <small>سوابق مشتریان</small>
+        </button>
+
+        ${
+          isTechnician()
+            ? `
+              <button onclick="navigate('technician')">
+                <strong>🛠</strong>
+                کارهای من
+                <small>پرونده‌های واگذار شده</small>
+              </button>
+            `
+            : ''
+        }
+
+      </div>
+
+      <div class="mc-card">
+
+        <div class="mc-card-title">
+          <h2>آخرین پذیرش‌ها</h2>
+
+          ${
+            canReception()
+              ? `<button onclick="navigate('reception')">
+                   پذیرش جدید
+                 </button>`
+              : ''
+          }
+        </div>
+
+        <div id="latestCases">
+          ${renderCaseRows(state.cases.slice(0, 6))}
+        </div>
+
+      </div>
+
+    </div>
+  `;
+}
+
+/* ---------- Reception ---------- */
+
+function renderReception() {
+  const root =
+    document.querySelector('[data-page="reception"]');
+
+  if (!root || !canReception()) return;
+
+  root.innerHTML = `
+    <div class="mc-page">
+
+      <div class="mc-page-head">
+        <div>
+          <h1>پذیرش جدید</h1>
+          <p>ثبت مشتری، موتورسیکلت و درخواست تعمیر</p>
+        </div>
+
+        <button onclick="navigate('dashboard')">
+          برگشت
+        </button>
+      </div>
+
+      <form id="receptionForm" class="mc-form">
+
+        <div class="mc-section">
+          <h3>اطلاعات مشتری</h3>
+
+          <label>
+            نام و نام خانوادگی *
+            <input id="customerName" required>
+          </label>
+
+          <label>
+            موبایل *
+            <input
+              id="customerPhone"
+              inputmode="tel"
+              required
+              placeholder="09xxxxxxxxx"
+            >
+          </label>
+        </div>
+
+        <div class="mc-section">
+          <h3>موتورسیکلت</h3>
+
+          <label>
+            برند / مدل *
+            <input id="bikeModel" required>
+          </label>
+
+          <label>
+            پلاک / شناسه
+            <input id="bikePlate">
+          </label>
+
+          <label>
+            کیلومتر
+            <input id="bikeKm" inputmode="numeric">
+          </label>
+        </div>
+
+        <div class="mc-section">
+          <h3>درخواست تعمیر</h3>
+
+          <label>
+            شرح مشکل / سرویس *
+            <textarea id="problem" required></textarea>
+          </label>
+
+          <label>
+            نوبت مرتبط
+            <select id="appointmentId">
+              <option value="">بدون نوبت</option>
+              ${state.appointments
+                .filter(a =>
+                  String(a.date || '').slice(0, 10) >= today()
+                )
+                .map(a => `
+                  <option value="${esc(a.id)}">
+                    ${esc(a.date)} -
+                    ${esc(a.time || '')} -
+                    ${esc(a.customerName || a.name || '')}
+                  </option>
+                `)
+                .join('')}
+            </select>
+          </label>
+        </div>
+
+        <button class="mc-primary" type="submit">
+          ثبت پذیرش
+        </button>
+
+      </form>
+
+    </div>
+  `;
+
+  document
+    .getElementById('receptionForm')
+    ?.addEventListener('submit', submitReception);
+}
+
+async function submitReception(event) {
+  event.preventDefault();
+
+  const payload = {
+    customer: {
+      name: document.getElementById('customerName').value.trim(),
+      phone: document.getElementById('customerPhone').value.trim()
+    },
+
+    motorcycle: {
+      model: document.getElementById('bikeModel').value.trim(),
+      plate: document.getElementById('bikePlate').value.trim(),
+      km: document.getElementById('bikeKm').value.trim()
+    },
+
+    problem:
+      document.getElementById('problem').value.trim(),
+
+    appointmentId:
+      document.getElementById('appointmentId').value || null,
+
+    status: 'پذیرش شده',
+
+    checkInAt: new Date().toISOString()
+  };
+
+  try {
+    await api('/cases', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+
+    showToast('پذیرش با موفقیت ثبت شد');
+
+    await loadAll();
+
+    navigate('dashboard');
+
+  } catch (err) {
+    showToast(err.message || 'ثبت پذیرش انجام نشد');
+  }
+}
+
+/* ---------- Appointments ---------- */
+
+function renderAppointments() {
+  const root =
+    document.querySelector('[data-page="appointments"]');
+
+  if (!root || !canAppointments()) return;
+
+  root.innerHTML = `
+    <div class="mc-page">
+
+      <div class="mc-page-head">
+        <div>
+          <h1>نوبت‌دهی</h1>
+          <p>برنامه پذیرش مشتریان</p>
+        </div>
+
+        <button onclick="openAppointmentForm()">
+          + نوبت جدید
+        </button>
+      </div>
+
+      <div class="mc-card">
+        ${renderAppointmentsRows()}
+      </div>
+
+    </div>
+  `;
+}
+
+function renderAppointmentsRows() {
+  if (!state.appointments.length) {
+    return `
+      <div class="mc-empty">
+        هنوز نوبتی ثبت نشده است.
       </div>
     `;
   }
 
-  if (trackingForm) {
-    trackingForm.addEventListener(
-      "submit",
-      async (event) => {
-        event.preventDefault();
+  return state.appointments
+    .sort((a, b) =>
+      String(a.date + a.time)
+        .localeCompare(String(b.date + b.time))
+    )
+    .map(a => `
+      <div class="mc-row">
 
-        const input =
-          trackingForm.querySelector(
-            "input"
+        <div>
+          <strong>
+            ${esc(
+              a.customerName ||
+              a.name ||
+              'مشتری'
+            )}
+          </strong>
+
+          <small>
+            ${esc(a.date || '')}
+            ${esc(a.time || '')}
+            ${a.phone ? ' • ' + esc(a.phone) : ''}
+          </small>
+        </div>
+
+        <span class="mc-badge">
+          ${esc(a.status || 'رزرو شده')}
+        </span>
+
+        ${
+          canCheckInOut()
+            ? `
+              <button
+                onclick="checkInAppointment('${esc(a.id)}')">
+                ورود
+              </button>
+            `
+            : ''
+        }
+
+      </div>
+    `)
+    .join('');
+}
+
+async function openAppointmentForm() {
+  const name =
+    prompt('نام مشتری:');
+
+  if (!name) return;
+
+  const phone =
+    prompt('شماره موبایل:') || '';
+
+  const date =
+    prompt('تاریخ نوبت (YYYY-MM-DD):', today());
+
+  if (!date) return;
+
+  const time =
+    prompt('ساعت نوبت (مثلاً 10:30):');
+
+  if (!time) return;
+
+  try {
+    await api('/appointments', {
+      method: 'POST',
+      body: JSON.stringify({
+        customerName: name,
+        phone,
+        date,
+        time,
+        status: 'رزرو شده'
+      })
+    });
+
+    showToast('نوبت ثبت شد');
+
+    await loadAll();
+
+    renderAppointments();
+
+  } catch (err) {
+    showToast(err.message || 'ثبت نوبت ناموفق بود');
+  }
+}
+
+/* ---------- Check In ---------- */
+
+async function checkInAppointment(id) {
+  if (!canCheckInOut()) {
+    showToast('دسترسی ندارید');
+    return;
+  }
+
+  try {
+    await api(`/appointments/${id}/check-in`, {
+      method: 'POST'
+    });
+
+    showToast('ورود مشتری ثبت شد');
+
+    await loadAll();
+
+    renderAppointments();
+
+  } catch (err) {
+    showToast(err.message || 'ثبت ورود انجام نشد');
+  }
+}
+
+/* ---------- Workshop ---------- */
+
+function renderWorkshop() {
+  const root =
+    document.querySelector('[data-page="workshop"]');
+
+  if (!root) return;
+
+  const active =
+    state.cases.filter(
+      c => c.status !== 'تحویل شده'
+    );
+
+  root.innerHTML = `
+    <div class="mc-page">
+
+      <div class="mc-page-head">
+        <div>
+          <h1>تعمیرگاه</h1>
+          <p>موتورسیکلت‌های داخل تعمیرگاه</p>
+        </div>
+      </div>
+
+      <div class="mc-card">
+
+        ${
+          active.length
+            ? renderCaseRows(active)
+            : `
+              <div class="mc-empty">
+                موتوری داخل تعمیرگاه نیست.
+              </div>
+            `
+        }
+
+      </div>
+
+    </div>
+  `;
+}
+
+/* ---------- Cases ---------- */
+
+function renderCases() {
+  const root =
+    document.querySelector('[data-page="cases"]');
+
+  if (!root) return;
+
+  root.innerHTML = `
+    <div class="mc-page">
+
+      <div class="mc-page-head">
+        <div>
+          <h1>پرونده‌ها</h1>
+          <p>جستجو و مدیریت سوابق</p>
+        </div>
+      </div>
+
+      <div class="mc-card">
+
+        <input
+          id="caseSearch"
+          placeholder="نام، موبایل، موتور یا کد پذیرش..."
+          oninput="filterCases()"
+        >
+
+        <div id="caseList">
+          ${renderCaseRows(state.cases)}
+        </div>
+
+      </div>
+
+    </div>
+  `;
+}
+
+function filterCases() {
+  const q =
+    document.getElementById('caseSearch')
+      ?.value
+      ?.trim()
+      ?.toLowerCase() || '';
+
+  const list =
+    state.cases.filter(c =>
+      JSON.stringify(c)
+        .toLowerCase()
+        .includes(q)
+    );
+
+  document.getElementById('caseList').innerHTML =
+    renderCaseRows(list);
+}
+
+function renderCaseRows(list) {
+  if (!list.length) {
+    return `
+      <div class="mc-empty">
+        موردی پیدا نشد.
+      </div>
+    `;
+  }
+
+  return list.map(c => `
+    <div
+      class="mc-row mc-click"
+      onclick="openCase('${esc(c.id)}')">
+
+      <div>
+
+        <strong>
+          ${esc(
+            c.bike ||
+            c.motorcycle?.model ||
+            c.motorcycleModel ||
+            'موتورسیکلت'
+          )}
+        </strong>
+
+        <small>
+          ${esc(
+            c.name ||
+            c.customer?.name ||
+            c.customerName ||
+            ''
+          )}
+
+          ${c.phone
+            ? ' • ' + esc(c.phone)
+            : ''}
+
+          ${c.id
+            ? ' • ' + esc(c.id)
+            : ''}
+        </small>
+
+      </div>
+
+      <span class="mc-badge">
+        ${esc(c.status || 'پذیرش شده')}
+      </span>
+
+    </div>
+  `).join('');
+}
+
+/* ---------- Case Detail ---------- */
+
+async function openCase(id) {
+  const c =
+    state.cases.find(x => String(x.id) === String(id));
+
+  if (!c) return;
+
+  const status =
+    c.status || 'پذیرش شده';
+
+  const technician =
+    c.technician ||
+    c.technicianName ||
+    '';
+
+  const tasks =
+    c.tasks || '';
+
+  const amount =
+    c.amount || c.totalAmount || 0;
+
+  const paid =
+    c.paid || c.paidAmount || 0;
+
+  const nextStatus =
+    prompt(
+      `وضعیت جدید:\n\n` +
+      `پذیرش شده\n` +
+      `در حال بررسی\n` +
+      `در حال تعمیر\n` +
+      `کنترل کیفیت\n` +
+      `آماده تحویل\n` +
+      `تحویل شده\n\n` +
+      `وضعیت فعلی: ${status}`,
+      status
+    );
+
+  if (!nextStatus) return;
+
+  let tech = technician;
+
+  if (canAssignTechnician()) {
+    tech =
+      prompt(
+        'نام تکنسین مسئول:',
+        technician
+      ) || technician;
+  }
+
+  const newAmount =
+    prompt(
+      'هزینه کل:',
+      amount
+    );
+
+  const newPaid =
+    prompt(
+      'پرداخت شده:',
+      paid
+    );
+
+  const newTasks =
+    prompt(
+      'شرح کار / خدمات:',
+      tasks
+    ) || tasks;
+
+  try {
+    await api(`/cases/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        status: nextStatus,
+        technician: tech,
+        tasks: newTasks,
+        amount: Number(newAmount || 0),
+        paid: Number(newPaid || 0)
+      })
+    });
+
+    showToast('پرونده ذخیره شد');
+
+    await loadAll();
+
+    renderCurrentPage();
+
+  } catch (err) {
+    showToast(err.message || 'ذخیره پرونده انجام نشد');
+  }
+}
+
+/* ---------- Technician ---------- */
+
+function renderTechnician() {
+  const root =
+    document.querySelector('[data-page="technician"]');
+
+  if (!root) return;
+
+  let list = state.cases;
+
+  if (isTechnician()) {
+    const name =
+      state.user?.name ||
+      state.user?.username ||
+      '';
+
+    list =
+      list.filter(c =>
+        String(
+          c.technician ||
+          c.technicianName ||
+          ''
+        ).includes(name)
+      );
+  }
+
+  list =
+    list.filter(c =>
+      [
+        'در حال بررسی',
+        'در حال تعمیر',
+        'کنترل کیفیت'
+      ].includes(c.status)
+    );
+
+  root.innerHTML = `
+    <div class="mc-page">
+
+      <div class="mc-page-head">
+        <div>
+          <h1>کارهای تعمیرکار</h1>
+          <p>پرونده‌های در حال تعمیر</p>
+        </div>
+      </div>
+
+      <div class="mc-card">
+
+        ${
+          list.length
+            ? renderCaseRows(list)
+            : `
+              <div class="mc-empty">
+                کاری برای نمایش وجود ندارد.
+              </div>
+            `
+        }
+
+      </div>
+
+    </div>
+  `;
+}
+
+/* ---------- Check Out ---------- */
+
+async function checkOutCase(id) {
+  if (!canCheckInOut()) {
+    showToast('دسترسی خروج فقط برای مدیران است');
+    return;
+  }
+
+  if (!confirm('خروج و تحویل موتور ثبت شود؟')) {
+    return;
+  }
+
+  try {
+    await api(`/cases/${encodeURIComponent(id)}/check-out`, {
+      method: 'POST'
+    });
+
+    showToast('خروج موتور ثبت شد');
+
+    await loadAll();
+
+    renderCurrentPage();
+
+  } catch (err) {
+    showToast(err.message || 'ثبت خروج انجام نشد');
+  }
+}
+
+/* ---------- Current Page ---------- */
+
+function renderCurrentPage() {
+  const active =
+    document.querySelector('[data-page]:not([style*="display: none"])');
+
+  if (!active) {
+    renderDashboard();
+    return;
+  }
+
+  const page =
+    active.dataset.page;
+
+  const renderers = {
+    dashboard: renderDashboard,
+    reception: renderReception,
+    appointments: renderAppointments,
+    workshop: renderWorkshop,
+    cases: renderCases,
+    technician: renderTechnician
+  };
+
+  if (renderers[page]) {
+    renderers[page]();
+  }
+}
+
+/* ---------- App Boot ---------- */
+
+function bindNavigation() {
+  document
+    .querySelectorAll('[data-nav]')
+    .forEach(button => {
+      button.addEventListener('click', () => {
+        navigate(button.dataset.nav);
+      });
+    });
+}
+
+function applyRoleUI() {
+  document
+    .querySelectorAll('[data-role]')
+    .forEach(el => {
+      const allowed =
+        el.dataset.role
+          .split(',')
+          .map(x => x.trim())
+          .some(r =>
+            String(role()).includes(
+              String(r).toLowerCase()
+            )
           );
 
-        const code =
-          clean(input?.value);
+      el.style.display =
+        allowed ? '' : 'none';
+    });
+}
 
-        if (!code) {
-          if (trackingResult) {
-            trackingResult.innerHTML = `
-              <div class="tracking-empty error">
-                لطفاً کد پیگیری را وارد کنید.
-              </div>
-            `;
-          }
+function renderApp() {
+  bindNavigation();
+  applyRoleUI();
 
-          input?.focus();
+  const loginPage =
+    document.querySelector('[data-page="login"]');
+
+  if (loginPage) {
+    loginPage.style.display = 'none';
+  }
+
+  navigate('dashboard');
+}
+
+async function boot() {
+  loadSession();
+
+  if (!state.user && token()) {
+    try {
+      const me = await api('/auth/me');
+
+      saveSession(
+        me.user || me,
+        token()
+      );
+    } catch (_) {}
+  }
+
+  if (state.user || token()) {
+    await loadAll();
+    renderApp();
+    return;
+  }
+
+  const loginForm =
+    document.getElementById('loginForm');
+
+  if (loginForm) {
+    loginForm.addEventListener(
+      'submit',
+      async event => {
+        event.preventDefault();
+
+        const username =
+          document.getElementById('username')
+            ?.value
+            ?.trim();
+
+        const password =
+          document.getElementById('password')
+            ?.value || '';
+
+        if (!username || !password) {
+          showToast('نام کاربری و رمز عبور را وارد کنید');
           return;
         }
 
-        const button =
-          trackingForm.querySelector(
-            'button[type="submit"]'
-          );
-
-        const originalText =
-          button?.textContent ||
-          "پیگیری وضعیت";
-
-        if (button) {
-          button.disabled = true;
-          button.textContent =
-            "در حال بررسی...";
-        }
-
-        try {
-          const data =
-            await apiRequest(
-              `${CASE_ENDPOINT}?code=${encodeURIComponent(
-                code
-              )}`
-            );
-
-          renderTrackingCase(
-            data?.case ||
-              data?.cases?.[0] ||
-              null
-          );
-        } catch (error) {
-          console.error(
-            "Tracking error:",
-            error
-          );
-
-          if (trackingResult) {
-            trackingResult.innerHTML = `
-              <div class="tracking-empty error">
-                ${escapeHtml(
-                  error.message ||
-                    "خطا در دریافت اطلاعات."
-                )}
-              </div>
-            `;
-          }
-        } finally {
-          if (button) {
-            button.disabled = false;
-            button.textContent =
-              originalText;
-          }
-        }
+        await login(username, password);
       }
     );
   }
+}
 
-  /* =========================================
-     MOBILE MENU
-  ========================================= */
-
-  const menuButton =
-    $(
-      "[data-menu-toggle], #menuToggle, #mobileMenuButton"
-    );
-
-  const mobileMenu =
-    $(
-      "[data-mobile-menu], #mobileMenu"
-    );
-
-  if (
-    menuButton &&
-    mobileMenu
-  ) {
-    menuButton.addEventListener(
-      "click",
-      () => {
-        const opened =
-          mobileMenu.classList.toggle(
-            "is-open"
-          );
-
-        mobileMenu.classList.toggle(
-          "active",
-          opened
-        );
-
-        menuButton.setAttribute(
-          "aria-expanded",
-          String(opened)
-        );
-      }
-    );
-  }
-
-  /* =========================================
-     PHONE
-  ========================================= */
-
-  const phoneInput =
-    $("#requestPhone");
-
-  if (phoneInput) {
-    phoneInput.addEventListener(
-      "input",
-      () => {
-        phoneInput.value =
-          phoneInput.value.replace(
-            /[^\d+\-\s]/g,
-            ""
-          );
-      }
-    );
-  }
-
-  /* =========================================
-     SMOOTH SCROLL
-  ========================================= */
-
-  $$('a[href^="#"]').forEach(
-    (link) => {
-      link.addEventListener(
-        "click",
-        (event) => {
-          const id =
-            link.getAttribute(
-              "href"
-            );
-
-          if (
-            !id ||
-            id === "#"
-          ) {
-            return;
-          }
-
-          const target =
-            document.querySelector(id);
-
-          if (!target) return;
-
-          event.preventDefault();
-
-          target.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
-
-          mobileMenu?.classList.remove(
-            "is-open"
-          );
-
-          mobileMenu?.classList.remove(
-            "active"
-          );
-        }
-      );
-    }
-  );
-
-  /* =========================================
-     API HEALTH
-  ========================================= */
-
-  async function checkApi() {
-    try {
-      const response =
-        await fetch(
-          `${API_BASE}/health`,
-          {
-            headers: {
-              Accept:
-                "application/json",
-            },
-          }
-        );
-
-      if (!response.ok) {
-        throw new Error(
-          "API unavailable"
-        );
-      }
-
-      const data =
-        await response.json();
-
-      console.log(
-        "MotoClinic API:",
-        data
-      );
-
-      document.documentElement.dataset.api =
-        "online";
-    } catch (error) {
-      console.warn(
-        "MotoClinic API unavailable",
-        error
-      );
-
-      document.documentElement.dataset.api =
-        "offline";
-    }
-  }
-
-  window.MotoClinic = {
-    API_BASE,
-    openRequestModal,
-    closeRequestModal,
-    checkApi,
-  };
-
-  checkApi();
-
-})();
+document.addEventListener(
+  'DOMContentLoaded',
+  boot
+);
