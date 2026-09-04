@@ -1,4 +1,5 @@
 const API_URL = "https://motoclinic-api.onrender.com/api";
+const AUTH_TOKEN_KEY = "motoclinic_auth_token";
 
 const app = document.getElementById("app");
 
@@ -22,6 +23,250 @@ const inputStyle = `
   font-family:Tahoma,Arial,sans-serif;
 `;
 
+// ─────────────────────────────────────────────
+// AUTHENTICATION
+// ─────────────────────────────────────────────
+
+async function apiFetch(url, options = {}) {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+
+  const headers = {
+    ...(options.headers || {}),
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  if (response.status === 401) {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    showLogin();
+    throw new Error("نشست شما منقضی شده است.");
+  }
+
+  return response;
+}
+
+function showLogin() {
+  app.innerHTML = `
+    <div dir="rtl" style="
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:#f3f3f3;
+      font-family:Tahoma,Arial,sans-serif;
+      padding:20px;
+      box-sizing:border-box;
+    ">
+
+      <div style="
+        width:380px;
+        max-width:100%;
+        background:#fff;
+        padding:30px;
+        border-radius:20px;
+        box-shadow:0 10px 35px rgba(0,0,0,.12);
+        box-sizing:border-box;
+      ">
+
+        <div style="
+          text-align:center;
+          font-size:48px;
+          margin-bottom:10px;
+        ">
+          🏍️
+        </div>
+
+        <h1 style="
+          text-align:center;
+          margin:0 0 10px;
+          font-size:24px;
+        ">
+          موتو کلینیک ولیعصر (عج)
+        </h1>
+
+        <p style="
+          text-align:center;
+          color:#777;
+          margin-bottom:25px;
+        ">
+          ورود به پنل مدیریت تعمیرگاه
+        </p>
+
+        <input
+          id="loginUsername"
+          type="text"
+          placeholder="نام کاربری"
+          autocomplete="username"
+          style="${inputStyle}"
+        >
+
+        <input
+          id="loginPassword"
+          type="password"
+          placeholder="رمز عبور"
+          autocomplete="current-password"
+          style="${inputStyle}"
+          onkeydown="if(event.key === 'Enter') login()"
+        >
+
+        <button
+          onclick="login()"
+          style="
+            ${buttonStyle}
+            width:100%;
+            margin-top:10px;
+          "
+        >
+          🔐 ورود به سیستم
+        </button>
+
+        <div
+          id="loginError"
+          style="
+            color:#d00;
+            text-align:center;
+            margin-top:15px;
+            min-height:22px;
+            font-size:14px;
+          "
+        ></div>
+
+      </div>
+    </div>
+  `;
+
+  setTimeout(() => {
+    const input = document.getElementById("loginUsername");
+    if (input) input.focus();
+  }, 50);
+}
+
+async function login() {
+  const usernameElement = document.getElementById("loginUsername");
+  const passwordElement = document.getElementById("loginPassword");
+  const errorElement = document.getElementById("loginError");
+
+  if (!usernameElement || !passwordElement || !errorElement) {
+    return;
+  }
+
+  const username = usernameElement.value.trim();
+  const password = passwordElement.value;
+
+  if (!username || !password) {
+    errorElement.textContent =
+      "⚠️ نام کاربری و رمز عبور را وارد کنید.";
+    return;
+  }
+
+  errorElement.textContent = "در حال ورود...";
+
+  try {
+    const response = await fetch(`${API_URL}/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username,
+        password,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      errorElement.textContent =
+        data.message || "❌ نام کاربری یا رمز عبور اشتباه است.";
+      return;
+    }
+
+    if (!data.token) {
+      errorElement.textContent =
+        "❌ سرور توکن ورود ارسال نکرد.";
+      return;
+    }
+
+    localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+
+    await initApp();
+
+  } catch (error) {
+    console.error(error);
+
+    errorElement.textContent =
+      "❌ ارتباط با سرور برقرار نشد.";
+  }
+}
+
+async function initApp() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+
+  if (!token) {
+    showLogin();
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_URL}/auth/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      showLogin();
+      return;
+    }
+
+    const data = await response.json();
+
+    window.currentUser = data.user || null;
+
+    await loadDashboard();
+
+  } catch (error) {
+    console.error(error);
+
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    showLogin();
+  }
+}
+
+async function logout() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+
+  try {
+    if (token) {
+      await fetch(`${API_URL}/auth/logout`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    }
+  } catch (error) {
+    console.error(error);
+  }
+
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  window.currentUser = null;
+
+  showLogin();
+}
+
+// ─────────────────────────────────────────────
+// DASHBOARD
+// ─────────────────────────────────────────────
+
 async function loadDashboard() {
   app.innerHTML = `
     <div dir="rtl" style="
@@ -31,11 +276,62 @@ async function loadDashboard() {
       padding:20px;
     ">
 
-      <h1>🏍️ موتو کلینیک ولیعصر (عج)</h1>
+      <div style="
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        gap:15px;
+        flex-wrap:wrap;
+      ">
 
-      <p style="color:#666">
-        سیستم هوشمند مدیریت تعمیرگاه موتورسیکلت
-      </p>
+        <div>
+          <h1 style="margin-bottom:8px;">
+            🏍️ موتو کلینیک ولیعصر (عج)
+          </h1>
+
+          <p style="color:#666;margin-top:0;">
+            سیستم هوشمند مدیریت تعمیرگاه موتورسیکلت
+          </p>
+        </div>
+
+        <button
+          onclick="logout()"
+          style="
+            padding:10px 16px;
+            border:none;
+            border-radius:10px;
+            background:#222;
+            color:white;
+            cursor:pointer;
+            font-family:Tahoma,Arial,sans-serif;
+          "
+        >
+          🚪 خروج
+        </button>
+
+      </div>
+
+      ${
+        window.currentUser
+          ? `
+            <div style="
+              margin-top:10px;
+              padding:12px 15px;
+              background:#f7f7f7;
+              border-radius:10px;
+              color:#555;
+            ">
+              👤 کاربر:
+              <strong>${window.currentUser.username || ""}</strong>
+              ${
+                window.currentUser.role
+                  ? ` — ${window.currentUser.role}`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
 
       <div style="
         display:grid;
@@ -109,7 +405,7 @@ async function loadDashboard() {
   `;
 
   try {
-    const response = await fetch(`${API_URL}/dashboard`);
+    const response = await apiFetch(`${API_URL}/dashboard`);
 
     if (!response.ok) {
       throw new Error("API error");
@@ -118,25 +414,30 @@ async function loadDashboard() {
     const data = await response.json();
 
     document.getElementById("customers").textContent =
-      Number(data.customers).toLocaleString("fa-IR");
+      Number(data.customers || 0).toLocaleString("fa-IR");
 
     document.getElementById("motorcycles").textContent =
-      Number(data.motorcycles).toLocaleString("fa-IR");
+      Number(data.motorcycles || 0).toLocaleString("fa-IR");
 
     document.getElementById("cases").textContent =
-      Number(data.activeCases).toLocaleString("fa-IR");
+      Number(data.activeCases || 0).toLocaleString("fa-IR");
 
     document.getElementById("income").textContent =
-      Number(data.revenue).toLocaleString("fa-IR");
+      Number(data.revenue || 0).toLocaleString("fa-IR");
 
     document.getElementById("apiStatus").innerHTML =
       "🟢 اتصال به سیستم برقرار است";
 
   } catch (error) {
 
-    document.getElementById("apiStatus").innerHTML =
-      "🔴 خطا در اتصال به API";
+    console.error(error);
 
+    const status = document.getElementById("apiStatus");
+
+    if (status) {
+      status.innerHTML =
+        "🔴 خطا در اتصال به API";
+    }
   }
 }
 
@@ -162,7 +463,11 @@ function showMessage(text) {
 // ─────────────────────────────────────────────
 
 function newCustomer() {
-  document.getElementById("message").innerHTML = `
+  const message = document.getElementById("message");
+
+  if (!message) return;
+
+  message.innerHTML = `
     <div style="
       padding:20px;
       background:#fff;
@@ -209,10 +514,17 @@ function newCustomer() {
 }
 
 async function saveCustomer() {
-  const name = document.getElementById("customerName").value.trim();
-  const phone = document.getElementById("customerPhone").value.trim();
-  const address = document.getElementById("customerAddress").value.trim();
-  const notes = document.getElementById("customerNotes").value.trim();
+  const name =
+    document.getElementById("customerName").value.trim();
+
+  const phone =
+    document.getElementById("customerPhone").value.trim();
+
+  const address =
+    document.getElementById("customerAddress").value.trim();
+
+  const notes =
+    document.getElementById("customerNotes").value.trim();
 
   if (!name) {
     showMessage("⚠️ نام مشتری را وارد کنید.");
@@ -220,7 +532,7 @@ async function saveCustomer() {
   }
 
   try {
-    const response = await fetch(`${API_URL}/customers`, {
+    const response = await apiFetch(`${API_URL}/customers`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -236,18 +548,27 @@ async function saveCustomer() {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error || "خطا در ثبت مشتری");
+      throw new Error(
+        data.message ||
+        data.error ||
+        "خطا در ثبت مشتری"
+      );
     }
+
+    const customer = data.customer || data;
 
     showMessage(`
       <strong>✅ مشتری با موفقیت ثبت شد.</strong>
       <br>
-      شناسه مشتری: ${data.id}
+      نام: ${customer.name || name}
+      <br>
+      شناسه مشتری: ${customer.id || "ثبت شد"}
     `);
 
-    loadDashboard();
+    await loadDashboard();
 
   } catch (error) {
+    console.error(error);
     showMessage(`❌ ${error.message}`);
   }
 }
@@ -258,6 +579,8 @@ async function saveCustomer() {
 
 async function newMotorcycle() {
   const message = document.getElementById("message");
+
+  if (!message) return;
 
   message.innerHTML = `
     <div style="
@@ -279,7 +602,8 @@ async function newMotorcycle() {
   `;
 
   try {
-    const response = await fetch(`${API_URL}/customers`);
+    const response =
+      await apiFetch(`${API_URL}/customers`);
 
     if (!response.ok) {
       throw new Error("خطا در دریافت مشتریان");
@@ -287,7 +611,8 @@ async function newMotorcycle() {
 
     const customers = await response.json();
 
-    if (!customers.length) {
+    if (!Array.isArray(customers) || !customers.length) {
+
       message.innerHTML = `
         <div style="
           padding:20px;
@@ -295,6 +620,7 @@ async function newMotorcycle() {
           border-radius:15px;
           margin-top:20px;
         ">
+
           <h2>🏍️ ثبت موتورسیکلت</h2>
 
           <p>هنوز مشتری ثبت نشده است.</p>
@@ -305,25 +631,36 @@ async function newMotorcycle() {
           >
             ➕ ابتدا ثبت مشتری
           </button>
+
         </div>
       `;
 
       return;
     }
 
-    document.getElementById("motorcycleFormStatus").innerHTML = `
+    document.getElementById(
+      "motorcycleFormStatus"
+    ).innerHTML = `
 
       <select
         id="motorcycleCustomer"
         style="${inputStyle}"
       >
-        <option value="">انتخاب مالک *</option>
+
+        <option value="">
+          انتخاب مالک *
+        </option>
 
         ${customers
           .map(
             (customer) => `
               <option value="${customer.id}">
-                ${customer.name}${customer.phone ? ` - ${customer.phone}` : ""}
+                ${customer.name}
+                ${
+                  customer.phone
+                    ? ` - ${customer.phone}`
+                    : ""
+                }
               </option>
             `
           )
@@ -386,80 +723,129 @@ async function newMotorcycle() {
     `;
 
   } catch (error) {
+
+    console.error(error);
+
     showMessage(`❌ ${error.message}`);
   }
 }
 
 async function saveMotorcycle() {
   const customerId =
-    document.getElementById("motorcycleCustomer").value;
+    document.getElementById(
+      "motorcycleCustomer"
+    ).value;
 
   const plate =
-    document.getElementById("motorcyclePlate").value.trim();
+    document.getElementById(
+      "motorcyclePlate"
+    ).value.trim();
 
   const brand =
-    document.getElementById("motorcycleBrand").value.trim();
+    document.getElementById(
+      "motorcycleBrand"
+    ).value.trim();
 
   const model =
-    document.getElementById("motorcycleModel").value.trim();
+    document.getElementById(
+      "motorcycleModel"
+    ).value.trim();
 
   const year =
-    document.getElementById("motorcycleYear").value.trim();
+    document.getElementById(
+      "motorcycleYear"
+    ).value.trim();
 
   const color =
-    document.getElementById("motorcycleColor").value.trim();
+    document.getElementById(
+      "motorcycleColor"
+    ).value.trim();
 
   const vin =
-    document.getElementById("motorcycleVin").value.trim();
+    document.getElementById(
+      "motorcycleVin"
+    ).value.trim();
 
   const mileage =
-    document.getElementById("motorcycleMileage").value.trim();
+    document.getElementById(
+      "motorcycleMileage"
+    ).value.trim();
 
   if (!customerId) {
-    showMessage("⚠️ مالک موتورسیکلت را انتخاب کنید.");
+    showMessage(
+      "⚠️ مالک موتورسیکلت را انتخاب کنید."
+    );
     return;
   }
 
   if (!plate) {
-    showMessage("⚠️ شماره پلاک را وارد کنید.");
+    showMessage(
+      "⚠️ شماره پلاک را وارد کنید."
+    );
     return;
   }
 
   try {
-    const response = await fetch(`${API_URL}/motorcycles`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        customerId,
-        plate,
-        brand,
-        model,
-        year: year ? Number(year) : null,
-        color,
-        vin,
-        mileage: mileage ? Number(mileage) : 0,
-      }),
-    });
+
+    const response =
+      await apiFetch(`${API_URL}/motorcycles`, {
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json",
+        },
+
+        body: JSON.stringify({
+          customerId,
+          plate,
+          brand,
+          model,
+          year: year
+            ? Number(year)
+            : null,
+          color,
+          vin,
+          mileage: mileage
+            ? Number(mileage)
+            : 0,
+        }),
+      });
 
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error || "خطا در ثبت موتورسیکلت");
+      throw new Error(
+        data.message ||
+        data.error ||
+        "خطا در ثبت موتورسیکلت"
+      );
     }
 
+    const motorcycle =
+      data.motorcycle || data;
+
     showMessage(`
-      <strong>✅ موتورسیکلت با موفقیت ثبت شد.</strong>
+      <strong>
+        ✅ موتورسیکلت با موفقیت ثبت شد.
+      </strong>
+
       <br>
-      پلاک: ${data.plate}
+
+      پلاک:
+      ${motorcycle.plate || plate}
+
       <br>
-      شناسه موتورسیکلت: ${data.id}
+
+      شناسه موتورسیکلت:
+      ${motorcycle.id || "ثبت شد"}
     `);
 
-    loadDashboard();
+    await loadDashboard();
 
   } catch (error) {
+
+    console.error(error);
+
     showMessage(`❌ ${error.message}`);
   }
 }
@@ -469,9 +855,16 @@ async function saveMotorcycle() {
 // ─────────────────────────────────────────────
 
 function newCase() {
-  showMessage(
-    "🔧 بخش پذیرش تعمیرگاه را بعد از تکمیل ثبت موتورسیکلت فعال می‌کنیم."
-  );
+  showMessage(`
+    🔧 بخش پذیرش تعمیرگاه در مرحله بعد فعال می‌شود.
+    <br>
+    این بخش به زنجیره پرونده تعمیر،
+    تشخیص، قطعات، اجرت و وضعیت تعمیر متصل خواهد شد.
+  `);
 }
 
-loadDashboard();
+// ─────────────────────────────────────────────
+// START APPLICATION
+// ─────────────────────────────────────────────
+
+initApp();
