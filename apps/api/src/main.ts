@@ -231,6 +231,33 @@ async function ensureAuthTables() {
   `);
 
   /*
+   * جدول درخواست‌های عمومی مشتری
+   */
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS customer_requests (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name VARCHAR(200) NOT NULL,
+      phone VARCHAR(50) NOT NULL,
+      motorcycle VARCHAR(200),
+      service VARCHAR(200),
+      description TEXT,
+      status VARCHAR(30) NOT NULL DEFAULT 'NEW',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_customer_requests_status
+    ON customer_requests(status)
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_customer_requests_created_at
+    ON customer_requests(created_at DESC)
+  `);
+
+  /*
    * اگر ADMIN_USERNAME و ADMIN_PASSWORD
    * در Environment تنظیم شده باشند،
    * مدیر اصلی به صورت خودکار ساخته می‌شود.
@@ -296,9 +323,10 @@ app.get("/api/health", async (_req, res) => {
     res.json({
       ok: true,
       service: "motoclinic-api",
-      version: "0.7.0",
+      version: "0.8.0",
       database: "connected",
       authentication: "enabled",
+      customerRequests: "enabled",
     });
   } catch (error) {
     console.error("HEALTH ERROR:", error);
@@ -306,7 +334,7 @@ app.get("/api/health", async (_req, res) => {
     res.status(500).json({
       ok: false,
       service: "motoclinic-api",
-      version: "0.7.0",
+      version: "0.8.0",
       database: "error",
     });
   }
@@ -316,8 +344,9 @@ app.get("/api", (_req, res) => {
   res.json({
     ok: true,
     service: "motoclinic-api",
-    version: "0.7.0",
+    version: "0.8.0",
     authentication: "enabled",
+    customerRequests: "enabled",
   });
 });
 
@@ -1037,8 +1066,43 @@ app.post("/api/motorcycles", async (req, res) => {
    CASES
 ========================= */
 
-app.get("/api/cases", async (_req, res) => {
+app.get("/api/cases", async (req, res) => {
   try {
+    const code =
+      clean(req.query?.code);
+
+    if (code) {
+      const result =
+        await pool.query(
+          `
+          SELECT
+            sc.*,
+            c.name AS customer_name,
+            c.phone AS customer_phone,
+            m.plate AS motorcycle_plate,
+            m.brand AS motorcycle_brand,
+            m.model AS motorcycle_model
+          FROM service_cases sc
+          JOIN customers c
+            ON c.id = sc.customer_id
+          JOIN motorcycles m
+            ON m.id = sc.motorcycle_id
+          WHERE
+            sc.id::text = $1
+            OR sc.id::text ILIKE $1
+          ORDER BY sc.created_at DESC
+          LIMIT 1
+          `,
+          [code]
+        );
+
+      return res.json({
+        ok: true,
+        cases: result.rows,
+        case: result.rows[0] || null,
+      });
+    }
+
     const result = await pool.query(`
       SELECT
         sc.*,
@@ -1055,7 +1119,10 @@ app.get("/api/cases", async (_req, res) => {
       ORDER BY sc.created_at DESC
     `);
 
-    res.json(result.rows);
+    res.json({
+      ok: true,
+      cases: result.rows,
+    });
   } catch (error) {
     console.error(error);
 
@@ -1336,6 +1403,281 @@ app.patch(
 );
 
 /* =========================
+   PUBLIC CUSTOMER REQUESTS
+========================= */
+
+/*
+ * این endpoint عمومی است.
+ * مشتری بدون ورود به پنل می‌تواند
+ * درخواست سرویس ثبت کند.
+ */
+
+app.post(
+  "/api/customer-requests",
+  async (req, res) => {
+    try {
+      const name =
+        clean(req.body?.name);
+
+      const phone =
+        clean(req.body?.phone);
+
+      const motorcycle =
+        clean(
+          req.body?.motorcycle ||
+          req.body?.motorcycle_name
+        );
+
+      const service =
+        clean(
+          req.body?.service ||
+          req.body?.service_type
+        );
+
+      const description =
+        clean(
+          req.body?.description ||
+          req.body?.message ||
+          req.body?.notes
+        );
+
+      if (!name || !phone) {
+        return res.status(400).json({
+          ok: false,
+          message:
+            "نام و شماره تماس الزامی است",
+        });
+      }
+
+      const result =
+        await pool.query(
+          `
+          INSERT INTO customer_requests
+            (
+              name,
+              phone,
+              motorcycle,
+              service,
+              description
+            )
+          VALUES
+            ($1,$2,$3,$4,$5)
+          RETURNING
+            id,
+            name,
+            phone,
+            motorcycle,
+            service,
+            description,
+            status,
+            created_at
+          `,
+          [
+            name,
+            phone,
+            motorcycle || null,
+            service || null,
+            description || null,
+          ]
+        );
+
+      res.status(201).json({
+        ok: true,
+        message:
+          "درخواست سرویس با موفقیت ثبت شد",
+        request: result.rows[0],
+      });
+    } catch (error) {
+      console.error(
+        "CUSTOMER REQUEST ERROR:",
+        error
+      );
+
+      res.status(500).json({
+        ok: false,
+        message:
+          "خطا در ثبت درخواست سرویس",
+      });
+    }
+  }
+);
+
+/* =========================
+   CUSTOMER REQUESTS
+   MANAGEMENT
+========================= */
+
+app.get(
+  "/api/customer-requests",
+  requireRoles([
+    "OWNER",
+    "EXECUTIVE",
+  ]),
+  async (_req, res) => {
+    try {
+      const result =
+        await pool.query(`
+          SELECT
+            id,
+            name,
+            phone,
+            motorcycle,
+            service,
+            description,
+            status,
+            created_at,
+            updated_at
+          FROM customer_requests
+          ORDER BY created_at DESC
+        `);
+
+      res.json({
+        ok: true,
+        requests: result.rows,
+      });
+    } catch (error) {
+      console.error(
+        "GET CUSTOMER REQUESTS ERROR:",
+        error
+      );
+
+      res.status(500).json({
+        ok: false,
+        message:
+          "خطا در دریافت درخواست‌ها",
+      });
+    }
+  }
+);
+
+app.get(
+  "/api/customer-requests/:requestId",
+  requireRoles([
+    "OWNER",
+    "EXECUTIVE",
+  ]),
+  async (req, res) => {
+    try {
+      const requestId =
+        clean(req.params.requestId);
+
+      const result =
+        await pool.query(
+          `
+          SELECT *
+          FROM customer_requests
+          WHERE id = $1
+          `,
+          [requestId]
+        );
+
+      if (result.rowCount === 0) {
+        return res.status(404).json({
+          ok: false,
+          message:
+            "درخواست پیدا نشد",
+        });
+      }
+
+      res.json({
+        ok: true,
+        request: result.rows[0],
+      });
+    } catch (error) {
+      console.error(
+        "GET CUSTOMER REQUEST ERROR:",
+        error
+      );
+
+      res.status(500).json({
+        ok: false,
+        message:
+          "خطا در دریافت درخواست",
+      });
+    }
+  }
+);
+
+app.patch(
+  "/api/customer-requests/:requestId",
+  requireRoles([
+    "OWNER",
+    "EXECUTIVE",
+  ]),
+  async (req, res) => {
+    try {
+      const requestId =
+        clean(req.params.requestId);
+
+      const status =
+        clean(req.body?.status).toUpperCase();
+
+      const allowedStatuses = [
+        "NEW",
+        "CONTACTED",
+        "SCHEDULED",
+        "CONVERTED",
+        "CANCELLED",
+        "CLOSED",
+      ];
+
+      if (
+        !allowedStatuses.includes(status)
+      ) {
+        return res.status(400).json({
+          ok: false,
+          message:
+            "وضعیت درخواست معتبر نیست",
+          allowedStatuses,
+        });
+      }
+
+      const result =
+        await pool.query(
+          `
+          UPDATE customer_requests
+          SET
+            status = $1,
+            updated_at = now()
+          WHERE id = $2
+          RETURNING *
+          `,
+          [
+            status,
+            requestId,
+          ]
+        );
+
+      if (result.rowCount === 0) {
+        return res.status(404).json({
+          ok: false,
+          message:
+            "درخواست پیدا نشد",
+        });
+      }
+
+      res.json({
+        ok: true,
+        message:
+          "وضعیت درخواست به‌روزرسانی شد",
+        request: result.rows[0],
+      });
+    } catch (error) {
+      console.error(
+        "UPDATE CUSTOMER REQUEST ERROR:",
+        error
+      );
+
+      res.status(500).json({
+        ok: false,
+        message:
+          "خطا در به‌روزرسانی درخواست",
+      });
+    }
+  }
+);
+
+/* =========================
    STARTUP
 ========================= */
 
@@ -1345,7 +1687,7 @@ async function start() {
     await ensureAuthTables();
 
     console.log(
-      "MotoClinic database/auth ready"
+      "MotoClinic database/auth/customer requests ready"
     );
 
     app.listen(
