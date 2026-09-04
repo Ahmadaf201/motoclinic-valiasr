@@ -1,11 +1,6 @@
 (() => {
   "use strict";
 
-  /*
-   * MotoClinic Public Website
-   * Frontend API connection
-   */
-
   const API_BASE =
     window.MOTOCLINIC_API_URL ||
     (window.location.hostname === "localhost" ||
@@ -13,15 +8,20 @@
       ? "http://localhost:4000"
       : "https://motoclinic-api.onrender.com");
 
-  const REQUEST_ENDPOINT = `${API_BASE}/api/customer-requests`;
-  const CASE_ENDPOINT = `${API_BASE}/api/cases`;
+  const REQUEST_ENDPOINT =
+    `${API_BASE}/api/customer-requests`;
 
-  const $ = (selector) => document.querySelector(selector);
-  const $$ = (selector) => document.querySelectorAll(selector);
+  const CASE_ENDPOINT =
+    `${API_BASE}/api/cases`;
 
-  function clean(value) {
-    return String(value ?? "").trim();
-  }
+  const $ = (selector) =>
+    document.querySelector(selector);
+
+  const $$ = (selector) =>
+    document.querySelectorAll(selector);
+
+  const clean = (value) =>
+    String(value ?? "").trim();
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -32,27 +32,12 @@
       .replaceAll("'", "&#039;");
   }
 
-  function showMessage(element, message, type = "info") {
-    if (!element) return;
-
-    element.textContent = message;
-    element.className = `site-message ${type}`;
-    element.hidden = false;
-  }
-
-  function hideMessage(element) {
-    if (!element) return;
-
-    element.hidden = true;
-    element.textContent = "";
-  }
-
   async function apiRequest(url, options = {}) {
     const response = await fetch(url, {
       ...options,
       headers: {
-        "Content-Type": "application/json",
         Accept: "application/json",
+        "Content-Type": "application/json",
         ...(options.headers || {}),
       },
     });
@@ -67,57 +52,48 @@
 
     if (!response.ok) {
       throw new Error(
-        data?.message || `خطای سرور (${response.status})`
+        data?.message ||
+        `خطای سرور (${response.status})`
       );
     }
 
     return data;
   }
 
-  /* =========================
-     MOBILE MENU
-  ========================= */
-
-  const menuButton = $("[data-menu-toggle]");
-  const mobileMenu = $("[data-mobile-menu]");
-
-  if (menuButton && mobileMenu) {
-    menuButton.addEventListener("click", () => {
-      const isOpen = mobileMenu.classList.toggle("is-open");
-
-      menuButton.setAttribute(
-        "aria-expanded",
-        String(isOpen)
-      );
-    });
-
-    $$("#siteNav a").forEach((link) => {
-      link.addEventListener("click", () => {
-        mobileMenu.classList.remove("is-open");
-        menuButton.setAttribute("aria-expanded", "false");
-      });
-    });
-  }
-
-  /* =========================
+  /* =========================================
      REQUEST MODAL
-  ========================= */
+  ========================================= */
 
-  const requestModal = $("#requestModal");
-  const openRequestButtons = $$(
-    "[data-open-request], #openRequest, #heroRequestButton"
-  );
-  const closeRequestButtons = $$(
-    "[data-close-request], #closeRequest"
-  );
+  const requestModal =
+    $("#requestModal");
+
+  const requestForm =
+    $("#requestForm");
+
+  const requestMessage =
+    $("#requestFormMessage");
 
   function openRequestModal() {
-    if (!requestModal) return;
+    if (!requestModal) {
+      console.error(
+        "requestModal not found"
+      );
+      return;
+    }
 
     requestModal.classList.add("is-open");
-    requestModal.setAttribute("aria-hidden", "false");
+    requestModal.classList.add("active");
 
-    document.body.classList.add("modal-open");
+    requestModal.setAttribute(
+      "aria-hidden",
+      "false"
+    );
+
+    requestModal.style.display = "flex";
+
+    document.body.classList.add(
+      "modal-open"
+    );
 
     setTimeout(() => {
       $("#requestName")?.focus();
@@ -128,214 +104,308 @@
     if (!requestModal) return;
 
     requestModal.classList.remove("is-open");
-    requestModal.setAttribute("aria-hidden", "true");
+    requestModal.classList.remove("active");
 
-    document.body.classList.remove("modal-open");
+    requestModal.setAttribute(
+      "aria-hidden",
+      "true"
+    );
+
+    requestModal.style.display = "none";
+
+    document.body.classList.remove(
+      "modal-open"
+    );
   }
 
-  openRequestButtons.forEach((button) => {
-    button.addEventListener("click", (event) => {
-      event.preventDefault();
-      openRequestModal();
-    });
-  });
+  /*
+   * هر دکمه‌ای که مربوط به درخواست سرویس باشد
+   * شناسایی می‌شود؛ حتی اگر ID متفاوت داشته باشد.
+   */
 
-  closeRequestButtons.forEach((button) => {
-    button.addEventListener("click", (event) => {
-      event.preventDefault();
-      closeRequestModal();
-    });
-  });
-
-  if (requestModal) {
-    requestModal.addEventListener("click", (event) => {
-      if (event.target === requestModal) {
-        closeRequestModal();
+  $$(
+    '[data-open-request], #openRequest, #heroRequestButton, #requestButton, #serviceRequest, .request-service-btn'
+  ).forEach((button) => {
+    button.addEventListener(
+      "click",
+      (event) => {
+        event.preventDefault();
+        openRequestModal();
       }
-    });
-  }
+    );
+  });
 
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      closeRequestModal();
+  /*
+   * دکمه‌های دارای متن «درخواست سرویس»
+   */
+
+  $$("button, a").forEach((element) => {
+    const text =
+      clean(element.textContent);
+
+    if (
+      text.includes("درخواست سرویس") &&
+      !element.dataset.requestBound
+    ) {
+      element.dataset.requestBound =
+        "true";
+
+      element.addEventListener(
+        "click",
+        (event) => {
+          event.preventDefault();
+          openRequestModal();
+        }
+      );
     }
   });
 
-  /* =========================
-     REQUEST FORM
-  ========================= */
-
-  const requestForm = $("#requestForm");
-  const requestFormMessage = $("#requestFormMessage");
-
-  if (requestForm) {
-    requestForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-
-      hideMessage(requestFormMessage);
-
-      const name =
-        clean($("#requestName")?.value);
-
-      const phone =
-        clean($("#requestPhone")?.value);
-
-      const motorcycle =
-        clean($("#requestMotorcycle")?.value);
-
-      const service =
-        clean($("#requestService")?.value);
-
-      const description =
-        clean($("#requestDescription")?.value);
-
-      if (!name) {
-        showMessage(
-          requestFormMessage,
-          "لطفاً نام خود را وارد کنید.",
-          "error"
-        );
-        $("#requestName")?.focus();
-        return;
+  $$(
+    '[data-close-request], #closeRequest, #closeRequestModal, .modal-close'
+  ).forEach((button) => {
+    button.addEventListener(
+      "click",
+      (event) => {
+        event.preventDefault();
+        closeRequestModal();
       }
+    );
+  });
 
-      if (!phone) {
-        showMessage(
-          requestFormMessage,
-          "لطفاً شماره تماس خود را وارد کنید.",
-          "error"
-        );
-        $("#requestPhone")?.focus();
-        return;
-      }
-
-      const phoneDigits = phone.replace(/\D/g, "");
-
-      if (phoneDigits.length < 10) {
-        showMessage(
-          requestFormMessage,
-          "شماره تماس واردشده معتبر نیست.",
-          "error"
-        );
-        $("#requestPhone")?.focus();
-        return;
-      }
-
-      const submitButton =
-        requestForm.querySelector(
-          'button[type="submit"]'
-        );
-
-      const originalText =
-        submitButton?.textContent || "ثبت درخواست";
-
-      if (submitButton) {
-        submitButton.disabled = true;
-        submitButton.textContent = "در حال ثبت...";
-      }
-
-      try {
-        const data = await apiRequest(
-          REQUEST_ENDPOINT,
-          {
-            method: "POST",
-            body: JSON.stringify({
-              name,
-              phone,
-              motorcycle,
-              service,
-              description,
-            }),
-          }
-        );
-
-        if (data?.request) {
-          localStorage.setItem(
-            "motoclinic_last_request",
-            JSON.stringify(data.request)
-          );
-        }
-
-        showMessage(
-          requestFormMessage,
-          data?.message ||
-            "درخواست شما با موفقیت ثبت شد.",
-          "success"
-        );
-
-        requestForm.reset();
-
-        setTimeout(() => {
+  if (requestModal) {
+    requestModal.addEventListener(
+      "click",
+      (event) => {
+        if (
+          event.target === requestModal
+        ) {
           closeRequestModal();
-        }, 1800);
-      } catch (error) {
-        console.error(
-          "Customer request error:",
-          error
-        );
-
-        showMessage(
-          requestFormMessage,
-          error.message ||
-            "ثبت درخواست انجام نشد. لطفاً دوباره تلاش کنید.",
-          "error"
-        );
-      } finally {
-        if (submitButton) {
-          submitButton.disabled = false;
-          submitButton.textContent = originalText;
         }
       }
-    });
+    );
   }
 
-  /* =========================
-     TRACKING
-  ========================= */
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (event.key === "Escape") {
+        closeRequestModal();
+      }
+    }
+  );
 
-  const trackingForm = $("#trackingForm");
-  const trackingResult = $("#trackingResult");
+  /* =========================================
+     REQUEST FORM
+  ========================================= */
+
+  if (requestForm) {
+    requestForm.addEventListener(
+      "submit",
+      async (event) => {
+        event.preventDefault();
+
+        if (requestMessage) {
+          requestMessage.hidden = true;
+          requestMessage.textContent = "";
+        }
+
+        const name =
+          clean($("#requestName")?.value);
+
+        const phone =
+          clean($("#requestPhone")?.value);
+
+        const motorcycle =
+          clean(
+            $("#requestMotorcycle")?.value
+          );
+
+        const service =
+          clean(
+            $("#requestService")?.value
+          );
+
+        const description =
+          clean(
+            $("#requestDescription")?.value
+          );
+
+        if (!name) {
+          showFormMessage(
+            "لطفاً نام خود را وارد کنید.",
+            "error"
+          );
+          $("#requestName")?.focus();
+          return;
+        }
+
+        if (!phone) {
+          showFormMessage(
+            "لطفاً شماره تماس خود را وارد کنید.",
+            "error"
+          );
+          $("#requestPhone")?.focus();
+          return;
+        }
+
+        const digits =
+          phone.replace(/\D/g, "");
+
+        if (digits.length < 10) {
+          showFormMessage(
+            "شماره تماس واردشده معتبر نیست.",
+            "error"
+          );
+          $("#requestPhone")?.focus();
+          return;
+        }
+
+        const submitButton =
+          requestForm.querySelector(
+            'button[type="submit"]'
+          );
+
+        const originalText =
+          submitButton?.textContent ||
+          "ثبت درخواست";
+
+        if (submitButton) {
+          submitButton.disabled = true;
+          submitButton.textContent =
+            "در حال ثبت...";
+        }
+
+        try {
+          const data =
+            await apiRequest(
+              REQUEST_ENDPOINT,
+              {
+                method: "POST",
+                body: JSON.stringify({
+                  name,
+                  phone,
+                  motorcycle,
+                  service,
+                  description,
+                }),
+              }
+            );
+
+          if (data?.request) {
+            localStorage.setItem(
+              "motoclinic_last_request",
+              JSON.stringify(
+                data.request
+              )
+            );
+          }
+
+          showFormMessage(
+            data?.message ||
+              "درخواست شما با موفقیت ثبت شد.",
+            "success"
+          );
+
+          requestForm.reset();
+
+          setTimeout(() => {
+            closeRequestModal();
+          }, 1800);
+        } catch (error) {
+          console.error(
+            "Request error:",
+            error
+          );
+
+          showFormMessage(
+            error.message ||
+              "ثبت درخواست انجام نشد.",
+            "error"
+          );
+        } finally {
+          if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.textContent =
+              originalText;
+          }
+        }
+      }
+    );
+  }
+
+  function showFormMessage(
+    message,
+    type
+  ) {
+    if (!requestMessage) {
+      alert(message);
+      return;
+    }
+
+    requestMessage.textContent =
+      message;
+
+    requestMessage.hidden = false;
+
+    requestMessage.className =
+      `site-message ${type}`;
+  }
+
+  /* =========================================
+     TRACKING
+  ========================================= */
+
+  const trackingForm =
+    $("#trackingForm");
+
+  const trackingResult =
+    $("#trackingResult");
 
   function statusLabel(status) {
-    const value = clean(status).toUpperCase();
+    const value =
+      clean(status).toUpperCase();
 
     const labels = {
       RECEIVED: "دریافت موتور",
       INSPECTION: "در حال بررسی",
       DIAGNOSIS: "تشخیص عیب",
-      WAITING_APPROVAL: "در انتظار تأیید",
+      WAITING_APPROVAL:
+        "در انتظار تأیید",
       APPROVED: "تأیید شده",
       IN_PROGRESS: "در حال تعمیر",
-      WAITING_PART: "در انتظار قطعه",
+      WAITING_PART:
+        "در انتظار قطعه",
       READY: "آماده تحویل",
       DELIVERED: "تحویل شده",
       COMPLETED: "تکمیل شده",
       CANCELLED: "لغو شده",
-      NEW: "جدید",
     };
 
-    return labels[value] || status || "نامشخص";
+    return (
+      labels[value] ||
+      status ||
+      "نامشخص"
+    );
   }
 
-  function renderTrackingCase(caseData) {
+  function renderTrackingCase(
+    caseData
+  ) {
     if (!trackingResult) return;
 
     if (!caseData) {
       trackingResult.innerHTML = `
         <div class="tracking-empty">
-          <strong>پرونده‌ای پیدا نشد.</strong>
-          <span>کد پیگیری را بررسی کنید و دوباره تلاش کنید.</span>
+          <strong>
+            پرونده‌ای پیدا نشد.
+          </strong>
+          <span>
+            کد پیگیری را بررسی کنید.
+          </span>
         </div>
       `;
       return;
     }
-
-    const customerName =
-      escapeHtml(
-        caseData.customer_name ||
-        caseData.customerName ||
-        "مشتری"
-      );
 
     const motorcycle =
       [
@@ -352,190 +422,284 @@
       "—";
 
     const status =
-      statusLabel(caseData.status);
+      statusLabel(
+        caseData.status
+      );
+
+    const customer =
+      caseData.customer_name ||
+      "مشتری";
 
     const description =
       caseData.description ||
-      caseData.problem ||
       "توضیحی ثبت نشده است.";
 
     trackingResult.innerHTML = `
       <div class="tracking-card">
+
         <div class="tracking-card-head">
+
           <div>
-            <small>کد پیگیری</small>
-            <strong>${escapeHtml(code)}</strong>
+            <small>
+              کد پیگیری
+            </small>
+
+            <strong>
+              ${escapeHtml(code)}
+            </strong>
           </div>
 
           <span class="tracking-status">
             ${escapeHtml(status)}
           </span>
+
         </div>
 
         <div class="tracking-info">
+
           <div>
             <span>مشتری</span>
-            <strong>${customerName}</strong>
+            <strong>
+              ${escapeHtml(customer)}
+            </strong>
           </div>
 
           <div>
             <span>موتورسیکلت</span>
             <strong>
-              ${escapeHtml(motorcycle || "ثبت نشده")}
+              ${escapeHtml(
+                motorcycle || "ثبت نشده"
+              )}
             </strong>
           </div>
 
           <div>
-            <span>وضعیت تعمیر</span>
-            <strong>${escapeHtml(status)}</strong>
+            <span>وضعیت</span>
+            <strong>
+              ${escapeHtml(status)}
+            </strong>
           </div>
 
           <div>
             <span>شرح</span>
-            <strong>${escapeHtml(description)}</strong>
+            <strong>
+              ${escapeHtml(description)}
+            </strong>
           </div>
+
         </div>
+
       </div>
     `;
   }
 
   if (trackingForm) {
-    trackingForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
+    trackingForm.addEventListener(
+      "submit",
+      async (event) => {
+        event.preventDefault();
 
-      const input =
-        trackingForm.querySelector(
-          'input[name="code"], #trackingCode, input'
-        );
+        const input =
+          trackingForm.querySelector(
+            "input"
+          );
 
-      const code = clean(input?.value);
+        const code =
+          clean(input?.value);
 
-      if (!code) {
-        if (trackingResult) {
-          trackingResult.innerHTML = `
-            <div class="tracking-empty error">
-              لطفاً کد پیگیری را وارد کنید.
-            </div>
-          `;
+        if (!code) {
+          if (trackingResult) {
+            trackingResult.innerHTML = `
+              <div class="tracking-empty error">
+                لطفاً کد پیگیری را وارد کنید.
+              </div>
+            `;
+          }
+
+          input?.focus();
+          return;
         }
 
-        input?.focus();
-        return;
-      }
+        const button =
+          trackingForm.querySelector(
+            'button[type="submit"]'
+          );
 
-      const submitButton =
-        trackingForm.querySelector(
-          'button[type="submit"]'
-        );
+        const originalText =
+          button?.textContent ||
+          "پیگیری وضعیت";
 
-      const originalText =
-        submitButton?.textContent || "پیگیری";
+        if (button) {
+          button.disabled = true;
+          button.textContent =
+            "در حال بررسی...";
+        }
 
-      if (submitButton) {
-        submitButton.disabled = true;
-        submitButton.textContent = "در حال بررسی...";
-      }
+        try {
+          const data =
+            await apiRequest(
+              `${CASE_ENDPOINT}?code=${encodeURIComponent(
+                code
+              )}`
+            );
 
-      try {
-        const url =
-          `${CASE_ENDPOINT}?code=${encodeURIComponent(code)}`;
+          renderTrackingCase(
+            data?.case ||
+              data?.cases?.[0] ||
+              null
+          );
+        } catch (error) {
+          console.error(
+            "Tracking error:",
+            error
+          );
 
-        const data =
-          await apiRequest(url);
-
-        const foundCase =
-          data?.case ||
-          data?.cases?.[0] ||
-          null;
-
-        renderTrackingCase(foundCase);
-      } catch (error) {
-        console.error(
-          "Tracking error:",
-          error
-        );
-
-        if (trackingResult) {
-          trackingResult.innerHTML = `
-            <div class="tracking-empty error">
-              ${
-                escapeHtml(
+          if (trackingResult) {
+            trackingResult.innerHTML = `
+              <div class="tracking-empty error">
+                ${escapeHtml(
                   error.message ||
-                  "خطا در دریافت اطلاعات پرونده."
-                )
-              }
-            </div>
-          `;
-        }
-      } finally {
-        if (submitButton) {
-          submitButton.disabled = false;
-          submitButton.textContent = originalText;
+                    "خطا در دریافت اطلاعات."
+                )}
+              </div>
+            `;
+          }
+        } finally {
+          if (button) {
+            button.disabled = false;
+            button.textContent =
+              originalText;
+          }
         }
       }
-    });
+    );
   }
 
-  /* =========================
-     PHONE INPUT
-  ========================= */
+  /* =========================================
+     MOBILE MENU
+  ========================================= */
 
-  const phoneInput = $("#requestPhone");
+  const menuButton =
+    $(
+      "[data-menu-toggle], #menuToggle, #mobileMenuButton"
+    );
+
+  const mobileMenu =
+    $(
+      "[data-mobile-menu], #mobileMenu"
+    );
+
+  if (
+    menuButton &&
+    mobileMenu
+  ) {
+    menuButton.addEventListener(
+      "click",
+      () => {
+        const opened =
+          mobileMenu.classList.toggle(
+            "is-open"
+          );
+
+        mobileMenu.classList.toggle(
+          "active",
+          opened
+        );
+
+        menuButton.setAttribute(
+          "aria-expanded",
+          String(opened)
+        );
+      }
+    );
+  }
+
+  /* =========================================
+     PHONE
+  ========================================= */
+
+  const phoneInput =
+    $("#requestPhone");
 
   if (phoneInput) {
-    phoneInput.addEventListener("input", () => {
-      phoneInput.value =
-        phoneInput.value.replace(/[^\d+\-\s]/g, "");
-    });
+    phoneInput.addEventListener(
+      "input",
+      () => {
+        phoneInput.value =
+          phoneInput.value.replace(
+            /[^\d+\-\s]/g,
+            ""
+          );
+      }
+    );
   }
 
-  /* =========================
+  /* =========================================
      SMOOTH SCROLL
-  ========================= */
+  ========================================= */
 
-  $$('a[href^="#"]').forEach((link) => {
-    link.addEventListener("click", (event) => {
-      const targetId =
-        link.getAttribute("href");
+  $$('a[href^="#"]').forEach(
+    (link) => {
+      link.addEventListener(
+        "click",
+        (event) => {
+          const id =
+            link.getAttribute(
+              "href"
+            );
 
-      if (
-        !targetId ||
-        targetId === "#" ||
-        targetId.length < 2
-      ) {
-        return;
-      }
+          if (
+            !id ||
+            id === "#"
+          ) {
+            return;
+          }
 
-      const target =
-        document.querySelector(targetId);
+          const target =
+            document.querySelector(id);
 
-      if (!target) return;
+          if (!target) return;
 
-      event.preventDefault();
+          event.preventDefault();
 
-      target.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    });
-  });
+          target.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
 
-  /* =========================
-     API HEALTH CHECK
-  ========================= */
+          mobileMenu?.classList.remove(
+            "is-open"
+          );
+
+          mobileMenu?.classList.remove(
+            "active"
+          );
+        }
+      );
+    }
+  );
+
+  /* =========================================
+     API HEALTH
+  ========================================= */
 
   async function checkApi() {
     try {
       const response =
-        await fetch(`${API_BASE}/health`, {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-          },
-        });
+        await fetch(
+          `${API_BASE}/health`,
+          {
+            headers: {
+              Accept:
+                "application/json",
+            },
+          }
+        );
 
       if (!response.ok) {
-        throw new Error("API unavailable");
+        throw new Error(
+          "API unavailable"
+        );
       }
 
       const data =
@@ -550,7 +714,7 @@
         "online";
     } catch (error) {
       console.warn(
-        "MotoClinic API is currently unavailable.",
+        "MotoClinic API unavailable",
         error
       );
 
@@ -558,10 +722,6 @@
         "offline";
     }
   }
-
-  /* =========================
-     PUBLIC API
-  ========================= */
 
   window.MotoClinic = {
     API_BASE,
@@ -571,4 +731,5 @@
   };
 
   checkApi();
+
 })();
