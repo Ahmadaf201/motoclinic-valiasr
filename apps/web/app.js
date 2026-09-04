@@ -12,6 +12,16 @@ const buttonStyle = `
   cursor:pointer;
 `;
 
+const inputStyle = `
+  width:100%;
+  padding:14px;
+  margin:8px 0;
+  border-radius:10px;
+  border:1px solid #ddd;
+  box-sizing:border-box;
+  font-family:Tahoma,Arial,sans-serif;
+`;
+
 async function loadDashboard() {
   app.innerHTML = `
     <div dir="rtl" style="
@@ -108,13 +118,13 @@ async function loadDashboard() {
     const data = await response.json();
 
     document.getElementById("customers").textContent =
-      data.customers.toLocaleString("fa-IR");
+      Number(data.customers).toLocaleString("fa-IR");
 
     document.getElementById("motorcycles").textContent =
-      data.motorcycles.toLocaleString("fa-IR");
+      Number(data.motorcycles).toLocaleString("fa-IR");
 
     document.getElementById("cases").textContent =
-      data.activeCases.toLocaleString("fa-IR");
+      Number(data.activeCases).toLocaleString("fa-IR");
 
     document.getElementById("income").textContent =
       Number(data.revenue).toLocaleString("fa-IR");
@@ -125,13 +135,17 @@ async function loadDashboard() {
   } catch (error) {
 
     document.getElementById("apiStatus").innerHTML =
-      "🟡 رابط کاربری آماده است؛ API هنوز اجرا نشده.";
+      "🔴 خطا در اتصال به API";
 
   }
 }
 
 function showMessage(text) {
-  document.getElementById("message").innerHTML = `
+  const message = document.getElementById("message");
+
+  if (!message) return;
+
+  message.innerHTML = `
     <div style="
       padding:15px;
       background:#fff8df;
@@ -142,6 +156,10 @@ function showMessage(text) {
     </div>
   `;
 }
+
+// ─────────────────────────────────────────────
+// CUSTOMER
+// ─────────────────────────────────────────────
 
 function newCustomer() {
   document.getElementById("message").innerHTML = `
@@ -156,27 +174,27 @@ function newCustomer() {
 
       <input
         id="customerName"
-        placeholder="نام و نام خانوادگی"
-        style="width:100%;padding:14px;margin:8px 0;border-radius:10px;border:1px solid #ddd;"
+        placeholder="نام و نام خانوادگی *"
+        style="${inputStyle}"
       >
 
       <input
         id="customerPhone"
         placeholder="شماره موبایل"
         type="tel"
-        style="width:100%;padding:14px;margin:8px 0;border-radius:10px;border:1px solid #ddd;"
+        style="${inputStyle}"
       >
 
       <input
         id="customerAddress"
         placeholder="آدرس"
-        style="width:100%;padding:14px;margin:8px 0;border-radius:10px;border:1px solid #ddd;"
+        style="${inputStyle}"
       >
 
       <textarea
         id="customerNotes"
         placeholder="توضیحات"
-        style="width:100%;padding:14px;margin:8px 0;border-radius:10px;border:1px solid #ddd;"
+        style="${inputStyle}height:100px;"
       ></textarea>
 
       <button
@@ -205,14 +223,14 @@ async function saveCustomer() {
     const response = await fetch(`${API_URL}/customers`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         name,
         phone,
         address,
-        notes
-      })
+        notes,
+      }),
     });
 
     const data = await response.json();
@@ -222,11 +240,9 @@ async function saveCustomer() {
     }
 
     showMessage(`
-      <div>
-        <strong>✅ مشتری با موفقیت ثبت شد.</strong>
-        <br>
-        شناسه مشتری: ${data.id}
-      </div>
+      <strong>✅ مشتری با موفقیت ثبت شد.</strong>
+      <br>
+      شناسه مشتری: ${data.id}
     `);
 
     loadDashboard();
@@ -236,12 +252,226 @@ async function saveCustomer() {
   }
 }
 
-function newMotorcycle() {
-  showMessage("🏍️ فرم ثبت موتورسیکلت را در مرحله بعد فعال می‌کنیم.");
+// ─────────────────────────────────────────────
+// MOTORCYCLE
+// ─────────────────────────────────────────────
+
+async function newMotorcycle() {
+  const message = document.getElementById("message");
+
+  message.innerHTML = `
+    <div style="
+      padding:20px;
+      background:#fff;
+      border-radius:15px;
+      margin-top:20px;
+    ">
+      <h2>🏍️ ثبت موتورسیکلت جدید</h2>
+
+      <p style="color:#666;">
+        ابتدا مالک موتورسیکلت را انتخاب کنید.
+      </p>
+
+      <div id="motorcycleFormStatus">
+        در حال دریافت لیست مشتریان...
+      </div>
+    </div>
+  `;
+
+  try {
+    const response = await fetch(`${API_URL}/customers`);
+
+    if (!response.ok) {
+      throw new Error("خطا در دریافت مشتریان");
+    }
+
+    const customers = await response.json();
+
+    if (!customers.length) {
+      message.innerHTML = `
+        <div style="
+          padding:20px;
+          background:#fff;
+          border-radius:15px;
+          margin-top:20px;
+        ">
+          <h2>🏍️ ثبت موتورسیکلت</h2>
+
+          <p>هنوز مشتری ثبت نشده است.</p>
+
+          <button
+            onclick="newCustomer()"
+            style="${buttonStyle}"
+          >
+            ➕ ابتدا ثبت مشتری
+          </button>
+        </div>
+      `;
+
+      return;
+    }
+
+    document.getElementById("motorcycleFormStatus").innerHTML = `
+
+      <select
+        id="motorcycleCustomer"
+        style="${inputStyle}"
+      >
+        <option value="">انتخاب مالک *</option>
+
+        ${customers
+          .map(
+            (customer) => `
+              <option value="${customer.id}">
+                ${customer.name}${customer.phone ? ` - ${customer.phone}` : ""}
+              </option>
+            `
+          )
+          .join("")}
+
+      </select>
+
+      <input
+        id="motorcyclePlate"
+        placeholder="شماره پلاک *"
+        style="${inputStyle}"
+      >
+
+      <input
+        id="motorcycleBrand"
+        placeholder="برند موتور؛ مثال: Honda"
+        style="${inputStyle}"
+      >
+
+      <input
+        id="motorcycleModel"
+        placeholder="مدل؛ مثال: CG 125"
+        style="${inputStyle}"
+      >
+
+      <input
+        id="motorcycleYear"
+        placeholder="سال ساخت"
+        type="number"
+        style="${inputStyle}"
+      >
+
+      <input
+        id="motorcycleColor"
+        placeholder="رنگ"
+        style="${inputStyle}"
+      >
+
+      <input
+        id="motorcycleVin"
+        placeholder="شماره شاسی / VIN"
+        style="${inputStyle}"
+      >
+
+      <input
+        id="motorcycleMileage"
+        placeholder="کارکرد کیلومتر"
+        type="number"
+        min="0"
+        value="0"
+        style="${inputStyle}"
+      >
+
+      <button
+        onclick="saveMotorcycle()"
+        style="${buttonStyle}"
+      >
+        💾 ذخیره موتورسیکلت
+      </button>
+    `;
+
+  } catch (error) {
+    showMessage(`❌ ${error.message}`);
+  }
 }
 
+async function saveMotorcycle() {
+  const customerId =
+    document.getElementById("motorcycleCustomer").value;
+
+  const plate =
+    document.getElementById("motorcyclePlate").value.trim();
+
+  const brand =
+    document.getElementById("motorcycleBrand").value.trim();
+
+  const model =
+    document.getElementById("motorcycleModel").value.trim();
+
+  const year =
+    document.getElementById("motorcycleYear").value.trim();
+
+  const color =
+    document.getElementById("motorcycleColor").value.trim();
+
+  const vin =
+    document.getElementById("motorcycleVin").value.trim();
+
+  const mileage =
+    document.getElementById("motorcycleMileage").value.trim();
+
+  if (!customerId) {
+    showMessage("⚠️ مالک موتورسیکلت را انتخاب کنید.");
+    return;
+  }
+
+  if (!plate) {
+    showMessage("⚠️ شماره پلاک را وارد کنید.");
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_URL}/motorcycles`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        customerId,
+        plate,
+        brand,
+        model,
+        year: year ? Number(year) : null,
+        color,
+        vin,
+        mileage: mileage ? Number(mileage) : 0,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "خطا در ثبت موتورسیکلت");
+    }
+
+    showMessage(`
+      <strong>✅ موتورسیکلت با موفقیت ثبت شد.</strong>
+      <br>
+      پلاک: ${data.plate}
+      <br>
+      شناسه موتورسیکلت: ${data.id}
+    `);
+
+    loadDashboard();
+
+  } catch (error) {
+    showMessage(`❌ ${error.message}`);
+  }
+}
+
+// ─────────────────────────────────────────────
+// SERVICE CASE
+// ─────────────────────────────────────────────
+
 function newCase() {
-  showMessage("🔧 فرم پذیرش تعمیرگاه را در مرحله بعد فعال می‌کنیم.");
+  showMessage(
+    "🔧 بخش پذیرش تعمیرگاه را بعد از تکمیل ثبت موتورسیکلت فعال می‌کنیم."
+  );
 }
 
 loadDashboard();
