@@ -32,6 +32,10 @@ function randomToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }
 
+/* =========================
+   AUTH TABLES
+========================= */
+
 async function ensureAuthTables() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -83,6 +87,67 @@ async function ensureAuthTables() {
     ON customer_requests(created_at DESC);
   `);
 }
+
+/* =========================
+   ENSURE ADMIN USER
+========================= */
+
+async function ensureAdminUser() {
+  const username = "Motoclinic";
+  const password = normalize(process.env.ADMIN_PASSWORD);
+
+  if (!password) {
+    throw new Error(
+      "ADMIN_PASSWORD is not set. Please add ADMIN_PASSWORD in Render Environment Variables."
+    );
+  }
+
+  const existing = await pool.query(
+    `
+    SELECT id
+    FROM users
+    WHERE LOWER(username) = LOWER($1)
+    LIMIT 1
+    `,
+    [username]
+  );
+
+  if (existing.rows[0]) {
+    await pool.query(
+      `
+      UPDATE users
+      SET
+        password_hash = $1,
+        role = 'OWNER',
+        active = TRUE
+      WHERE id = $2
+      `,
+      [password, existing.rows[0].id]
+    );
+
+    console.log("MotoClinic admin user updated.");
+    return;
+  }
+
+  await pool.query(
+    `
+    INSERT INTO users (
+      username,
+      password_hash,
+      role,
+      active
+    )
+    VALUES ($1, $2, 'OWNER', TRUE)
+    `,
+    [username, password]
+  );
+
+  console.log("MotoClinic admin user created.");
+}
+
+/* =========================
+   AUTH HELPERS
+========================= */
 
 async function getUserFromToken(token: string | undefined) {
   if (!token) return null;
@@ -238,12 +303,6 @@ app.post("/api/auth/login", async (req, res) => {
         message: "نام کاربری یا رمز عبور اشتباه است.",
       });
     }
-
-    /*
-      پشتیبانی از رمزهای ساده فعلی پروژه.
-      اگر password_hash به صورت bcrypt باشد،
-      بخش مربوط به bcrypt در نسخه‌های بعدی اضافه خواهد شد.
-    */
 
     if (password !== user.password_hash) {
       return res.status(401).json({
@@ -968,6 +1027,8 @@ app.use((_req, res) => {
 async function start() {
   try {
     await ensureAuthTables();
+
+    await ensureAdminUser();
 
     await pool.query("SELECT 1");
 
