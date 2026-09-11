@@ -167,11 +167,11 @@ function statusClass(status) {
     WAITING_APPROVAL: 'status-diagnosis',
     APPROVED: 'status-progress',
     REPAIRING: 'status-progress',
+    QUALITY_CHECK: 'status-quality',
     READY_FOR_DELIVERY: 'status-ready',
     DELIVERED: 'status-completed',
     CANCELLED: 'status-default'
   };
-
   return map[status] || 'status-default';
 }
 
@@ -182,29 +182,20 @@ function statusText(status) {
     WAITING_APPROVAL: 'در انتظار تأیید',
     APPROVED: 'تأیید شده',
     REPAIRING: 'در حال تعمیر',
+    QUALITY_CHECK: 'کنترل کیفیت',
     READY_FOR_DELIVERY: 'آماده تحویل',
     DELIVERED: 'تحویل شده',
     CANCELLED: 'لغو شده'
   };
-
   return map[status] || status || 'ثبت شده';
 }
 
 function isClosedCase(status) {
-  return [
-    'DELIVERED',
-    'CANCELLED'
-  ].includes(status);
+  return ['DELIVERED', 'CANCELLED'].includes(status);
 }
 
 function caseCode(c) {
-  return (
-    c?.case_code ||
-    c?.caseCode ||
-    c?.code ||
-    c?.id ||
-    '-'
-  );
+  return c?.case_code || c?.caseCode || c?.code || c?.id || '-';
 }
 
 /* =========================
@@ -279,66 +270,34 @@ function extractMotorcycles(data) {
    ========================= */
 
 async function loadPublicCases() {
-
-  // Public tracking is intentionally not loading
-  // private case data.
+  // The v1.0 backend protects /cases. Public tracking must use a dedicated
+  // public endpoint, so the public page does not preload private cases.
   state.cases = [];
 }
 
 async function loadAdminData() {
+  const results = await Promise.allSettled([
+    api('/dashboard'),
+    api('/cases'),
+    api('/customers'),
+    api('/motorcycles')
+  ]);
 
-  const results =
-    await Promise.allSettled([
-      api('/dashboard'),
-      api('/cases'),
-      api('/customers'),
-      api('/motorcycles')
-    ]);
-
-  if (
-    results[0].status ===
-    'fulfilled'
-  ) {
-
-    const data =
-      results[0].value;
-
-    state.dashboard =
-      data?.dashboard ||
-      null;
+  if (results[0].status === 'fulfilled') {
+    const data = results[0].value;
+    state.dashboard = data?.dashboard || null;
   }
 
-  if (
-    results[1].status ===
-    'fulfilled'
-  ) {
-
-    state.cases =
-      extractCases(
-        results[1].value
-      );
+  if (results[1].status === 'fulfilled') {
+    state.cases = extractCases(results[1].value);
   }
 
-  if (
-    results[2].status ===
-    'fulfilled'
-  ) {
-
-    state.customers =
-      extractCustomers(
-        results[2].value
-      );
+  if (results[2].status === 'fulfilled') {
+    state.customers = extractCustomers(results[2].value);
   }
 
-  if (
-    results[3].status ===
-    'fulfilled'
-  ) {
-
-    state.motorcycles =
-      extractMotorcycles(
-        results[3].value
-      );
+  if (results[3].status === 'fulfilled') {
+    state.motorcycles = extractMotorcycles(results[3].value);
   }
 }
 
@@ -417,14 +376,18 @@ function renderPublic() {
             </div>
 
             <h2>
+
               تعمیرگاه حرفه‌ای،
               <br>
               برای موتورسیکلت حرفه‌ای
+
             </h2>
 
             <p>
+
               سرویس، تعمیر، عیب‌یابی و نگهداری تخصصی
               موتورسیکلت با فرآیند شفاف و قابل پیگیری.
+
             </p>
 
             <div class="hero-actions">
@@ -555,14 +518,18 @@ function renderPublic() {
             </span>
 
             <h2>
+
               سریع، دقیق،
               <br>
               بدون دردسر
+
             </h2>
 
             <p>
+
               فرآیند پذیرش و پیگیری تعمیر را ساده کرده‌ایم
               تا همیشه بدانید موتورسیکلت شما در چه مرحله‌ای است.
+
             </p>
 
             <div class="express-badge">
@@ -864,9 +831,7 @@ async function trackCase(event) {
   event.preventDefault();
 
   const code =
-    $('trackingCode')
-      ?.value
-      .trim();
+    $('trackingCode')?.value.trim();
 
   if (!code) return;
 
@@ -874,9 +839,10 @@ async function trackCase(event) {
     $('trackingResult');
 
   result.innerHTML =
-    `<div class="status-result">
-      پیگیری عمومی در حال آماده‌سازی است.
-    </div>`;
+    `<div class="status-result">پیگیری عمومی در حال آماده‌سازی است.</div>`;
+
+  // Backend v1.0 intentionally requires authentication for /cases?code=...
+  // Do not expose protected case data from the public website.
 }
 
 /* =========================
@@ -890,27 +856,19 @@ async function submitRequest(event) {
   const payload = {
 
     name:
-      $('requestName')
-        .value
-        .trim(),
+      $('requestName').value.trim(),
 
     phone:
-      $('requestPhone')
-        .value
-        .trim(),
+      $('requestPhone').value.trim(),
 
     motorcycle:
-      $('requestBike')
-        .value
-        .trim(),
+      $('requestBike').value.trim(),
 
     service:
       'درخواست پذیرش',
 
     description:
-      $('requestProblem')
-        .value
-        .trim()
+      $('requestProblem').value.trim()
 
   };
 
@@ -920,6 +878,7 @@ async function submitRequest(event) {
       '/customer-requests',
       {
         method: 'POST',
+
         body:
           JSON.stringify(payload)
       }
@@ -1034,8 +993,7 @@ function showLogin() {
   document.body.appendChild(modal);
 
   setTimeout(() => {
-    $('loginUsername')
-      ?.focus();
+    $('loginUsername')?.focus();
   }, 50);
 }
 
@@ -1044,20 +1002,12 @@ async function submitLogin(event) {
   event.preventDefault();
 
   const username =
-    $('loginUsername')
-      ?.value
-      .trim() ||
-    '';
+    $('loginUsername')?.value.trim() || '';
 
   const password =
-    $('loginPassword')
-      ?.value ||
-    '';
+    $('loginPassword')?.value || '';
 
-  if (
-    !username ||
-    !password
-  ) {
+  if (!username || !password) {
 
     toast(
       'نام کاربری و رمز عبور را وارد کنید'
@@ -1080,8 +1030,7 @@ async function submitLogin(event) {
 
     if (button) {
 
-      button.disabled =
-        true;
+      button.disabled = true;
 
       button.textContent =
         'در حال ورود...';
@@ -1093,21 +1042,32 @@ async function submitLogin(event) {
         {
           method: 'POST',
 
-          body:
-            JSON.stringify({
-              username,
-              password
-            })
+          body: JSON.stringify({
+            username,
+            password
+          })
         }
       );
 
+    /*
+      Backend v0.8.0 returns:
+
+      {
+        ok: true,
+        token: "...",
+        user: {
+          id,
+          username,
+          role
+        }
+      }
+    */
+
     const user =
-      data?.user ||
-      null;
+      data?.user || null;
 
     const jwt =
-      data?.token ||
-      '';
+      data?.token || '';
 
     if (
       !data?.ok ||
@@ -1125,10 +1085,13 @@ async function submitLogin(event) {
       jwt
     );
 
+    /*
+      Verify the session against
+      the real backend.
+    */
+
     const me =
-      await api(
-        '/auth/me'
-      );
+      await api('/auth/me');
 
     state.user =
       me?.user ||
@@ -1141,8 +1104,7 @@ async function submitLogin(event) {
       )
     );
 
-    $('loginModal')
-      ?.remove();
+    $('loginModal')?.remove();
 
     toast(
       'ورود موفق بود'
@@ -1165,8 +1127,7 @@ async function submitLogin(event) {
 
     if (button) {
 
-      button.disabled =
-        false;
+      button.disabled = false;
 
       button.textContent =
         originalText;
@@ -1243,9 +1204,7 @@ function renderAdmin() {
 
       </header>
 
-      <main
-        id="adminMain"
-      ></main>
+      <main id="adminMain"></main>
 
       <footer>
 
@@ -1279,10 +1238,8 @@ function renderAdmin() {
           renderAdminPage(
             button.dataset.adminNav
           );
-
         }
       );
-
     });
 
   renderAdminPage(
@@ -1297,40 +1254,20 @@ function renderAdminPage(page) {
 
   if (!root) return;
 
-  if (
-    page === 'dashboard'
-  ) {
-
-    renderAdminDashboard(
-      root
-    );
+  if (page === 'dashboard') {
+    renderAdminDashboard(root);
   }
 
-  if (
-    page === 'cases'
-  ) {
-
-    renderAdminCases(
-      root
-    );
+  if (page === 'cases') {
+    renderAdminCases(root);
   }
 
-  if (
-    page === 'reception'
-  ) {
-
-    renderAdminReception(
-      root
-    );
+  if (page === 'reception') {
+    renderAdminReception(root);
   }
 
-  if (
-    page === 'workshop'
-  ) {
-
-    renderAdminWorkshop(
-      root
-    );
+  if (page === 'workshop') {
+    renderAdminWorkshop(root);
   }
 }
 
@@ -1341,17 +1278,13 @@ function renderAdminPage(page) {
 function renderAdminDashboard(root) {
 
   const d =
-    state.dashboard ||
-    {};
+    state.dashboard || {};
 
   const active =
     Number(
       d.activeCases ??
       state.cases.filter(
-        c =>
-          !isClosedCase(
-            c.status
-          )
+        c => !isClosedCase(c.status)
       ).length
     );
 
@@ -1535,7 +1468,9 @@ function renderAdminDashboard(root) {
 
           <button
             class="secondary-btn"
-            onclick="renderAdminPage('cases')"
+            onclick="
+              renderAdminPage('cases')
+            "
           >
             مشاهده همه
           </button>
@@ -1543,17 +1478,17 @@ function renderAdminDashboard(root) {
         </div>
 
         <div class="records">
+
           ${renderAdminCaseRows(
-            state.cases.slice(
-              0,
-              8
-            )
+            state.cases.slice(0, 8)
           )}
+
         </div>
 
       </div>
 
     </section>
+
   `;
 }
 
@@ -1583,7 +1518,9 @@ function renderAdminCases(root) {
 
         <button
           class="primary-btn"
-          onclick="renderAdminPage('reception')"
+          onclick="
+            renderAdminPage('reception')
+          "
         >
           + پذیرش جدید
         </button>
@@ -1596,8 +1533,12 @@ function renderAdminCases(root) {
 
           <input
             id="adminCaseSearch"
-            placeholder="جستجوی نام، موبایل، موتور یا کد..."
-            oninput="filterAdminCases()"
+            placeholder="
+              جستجوی نام، موبایل، موتور یا کد...
+            "
+            oninput="
+              filterAdminCases()
+            "
           >
 
         </div>
@@ -1616,6 +1557,7 @@ function renderAdminCases(root) {
       </div>
 
     </section>
+
   `;
 }
 
@@ -1642,9 +1584,8 @@ function filterAdminCases() {
   if (container) {
 
     container.innerHTML =
-      renderAdminCaseRows(
-        list
-      );
+      renderAdminCaseRows(list);
+
   }
 }
 
@@ -1659,83 +1600,79 @@ function renderAdminCaseRows(list) {
     `;
   }
 
-  return list
-    .map(c => {
+  return list.map(c => {
 
-      const customer =
-        c.customer_name ||
-        c.customer?.name ||
-        c.customerName ||
-        'مشتری';
+    const customer =
+      c.customer_name ||
+      c.customer?.name ||
+      c.customerName ||
+      'مشتری';
 
-      const phone =
-        c.customer_phone ||
-        c.customer?.phone ||
-        c.phone ||
-        '';
+    const phone =
+      c.customer_phone ||
+      c.customer?.phone ||
+      c.phone ||
+      '';
 
-      const bike =
-        [
-          c.motorcycle_brand,
-          c.motorcycle_model
-        ]
-          .filter(Boolean)
-          .join(' ') ||
-        c.motorcycle?.model ||
-        c.motorcycleModel ||
-        'موتورسیکلت';
+    const bike =
+      [
+        c.motorcycle_brand,
+        c.motorcycle_model
+      ]
+        .filter(Boolean)
+        .join(' ') ||
+      c.motorcycle?.model ||
+      c.motorcycleModel ||
+      'موتورسیکلت';
 
-      return `
+    return `
 
-        <div
-          class="mini-record"
-          onclick="openAdminCase('${esc(c.id)}')"
-        >
+      <div
+        class="mini-record"
+        onclick="
+          openAdminCase('${esc(c.id)}')
+        "
+      >
 
-          <div class="avatar">
-            🏍
-          </div>
+        <div class="avatar">
+          🏍
+        </div>
 
-          <div>
+        <div>
 
-            <strong>
-              ${esc(customer)}
-            </strong>
+          <strong>
+            ${esc(customer)}
+          </strong>
 
-            <span>
-              ${esc(bike)}
-              ${
-                phone
-                  ? ' • ' +
-                    esc(phone)
-                  : ''
-              }
-            </span>
-
-            <small>
-              کد:
-              ${esc(
-                caseCode(c)
-              )}
-            </small>
-
-          </div>
-
-          <span
-            class="badge ${statusClass(c.status)}"
-          >
-            ${esc(
-              statusText(
-                c.status
-              )
-            )}
+          <span>
+            ${esc(bike)}
+            ${
+              phone
+                ? ' • ' + esc(phone)
+                : ''
+            }
           </span>
 
-        </div>
-      `;
+          <small>
+            کد:
+            ${esc(caseCode(c))}
+          </small>
 
-    })
-    .join('');
+        </div>
+
+        <span
+          class="badge ${statusClass(c.status)}"
+        >
+          ${esc(
+            statusText(c.status)
+          )}
+        </span>
+
+      </div>
+
+    `;
+
+  }).join('');
 }
 
 /* =========================
@@ -1744,7 +1681,7 @@ function renderAdminCaseRows(list) {
 
 async function openAdminCase(id) {
 
-  const listCase =
+  let listCase =
     state.cases.find(
       item =>
         String(item.id) ===
@@ -1759,13 +1696,19 @@ async function openAdminCase(id) {
   if (!root) return;
 
   root.innerHTML = `
+
     <section class="section">
+
       <div class="panel">
+
         <div class="status-result">
           در حال دریافت جزئیات پرونده...
         </div>
+
       </div>
+
     </section>
+
   `;
 
   try {
@@ -1780,17 +1723,8 @@ async function openAdminCase(id) {
       listCase;
 
     const tasks =
-      Array.isArray(
-        fresh?.tasks
-      )
+      Array.isArray(fresh?.tasks)
         ? fresh.tasks
-        : [];
-
-    const parts =
-      Array.isArray(
-        fresh?.parts
-      )
-        ? fresh.parts
         : [];
 
     const estimate =
@@ -1811,23 +1745,8 @@ async function openAdminCase(id) {
         ? fresh.notes
         : [];
 
-    const history =
-      Array.isArray(
-        fresh?.history
-      )
-        ? fresh.history
-        : [];
-
-    const technicians =
-      Array.isArray(
-        fresh?.technicians
-      )
-        ? fresh.technicians
-        : [];
-
     const financial =
-      fresh?.financial ||
-      {
+      fresh?.financial || {
         total: 0,
         paid: 0,
         balance: 0
@@ -1868,20 +1787,20 @@ async function openAdminCase(id) {
           <div>
 
             <span class="eyebrow">
-              CASE #${esc(
-                caseCode(c)
-              )}
+              CASE #${esc(caseCode(c))}
             </span>
 
             <h2>
-              مدیریت پرونده تعمیر
+              جزئیات پرونده
             </h2>
 
           </div>
 
           <button
             class="secondary-btn"
-            onclick="renderAdminPage('cases')"
+            onclick="
+              renderAdminPage('cases')
+            "
           >
             برگشت
           </button>
@@ -1900,2457 +1819,4 @@ async function openAdminCase(id) {
 
               <strong>
                 ${esc(customer)}
-              </strong>
-
-              <small>
-                ${esc(
-                  phone || ''
-                )}
-              </small>
-
-            </div>
-
-            <span
-              class="badge ${statusClass(c.status)}"
-            >
-              ${esc(
-                statusText(
-                  c.status
-                )
-              )}
-            </span>
-
-          </div>
-
-          <div class="detail-grid">
-
-            <div class="detail-item">
-
-              <span>
-                موبایل
-              </span>
-
-              <strong>
-                ${esc(
-                  phone || '-'
-                )}
-              </strong>
-
-            </div>
-
-            <div class="detail-item">
-
-              <span>
-                موتورسیکلت
-              </span>
-
-              <strong>
-                ${esc(bike)}
-              </strong>
-
-            </div>
-
-            <div class="detail-item">
-
-              <span>
-                پلاک
-              </span>
-
-              <strong>
-                ${esc(
-                  plate || '-'
-                )}
-              </strong>
-
-            </div>
-
-            <div class="detail-item">
-
-              <span>
-                مبلغ کل
-              </span>
-
-              <strong>
-                ${money(
-                  financial.total
-                )}
-                تومان
-              </strong>
-
-            </div>
-
-            <div class="detail-item">
-
-              <span>
-                پرداخت شده
-              </span>
-
-              <strong>
-                ${money(
-                  financial.paid
-                )}
-                تومان
-              </strong>
-
-            </div>
-
-            <div class="detail-item">
-
-              <span>
-                مانده
-              </span>
-
-              <strong>
-                ${money(
-                  financial.balance
-                )}
-                تومان
-              </strong>
-
-            </div>
-
-          </div>
-
-          <div
-            class="detail-description"
-          >
-
-            <span>
-              شرح مشکل
-            </span>
-
-            <p>
-              ${esc(
-                c.complaint ||
-                '-'
-              )}
-            </p>
-
-          </div>
-
-          <div
-            class="detail-description"
-          >
-
-            <span>
-              تشخیص
-            </span>
-
-            <p>
-              ${esc(
-                c.diagnosis ||
-                '-'
-              )}
-            </p>
-
-          </div>
-
-          <div class="status-editor">
-
-            <div class="field">
-
-              <label>
-                وضعیت پرونده
-              </label>
-
-              <select
-                id="caseStatus"
-              >
-                ${statusOptions(
-                  c.status
-                )}
-              </select>
-
-            </div>
-
-            <div class="field">
-
-              <label>
-                شرح مشکل
-              </label>
-
-              <textarea
-                id="caseComplaint"
-                rows="3"
-              >${esc(
-                c.complaint ||
-                ''
-              )}</textarea>
-
-            </div>
-
-            <div class="field">
-
-              <label>
-                تشخیص
-              </label>
-
-              <textarea
-                id="caseDiagnosis"
-                rows="3"
-              >${esc(
-                c.diagnosis ||
-                ''
-              )}</textarea>
-
-            </div>
-
-            <div class="field">
-
-              <label>
-                یادداشت وضعیت
-              </label>
-
-              <input
-                id="caseStatusNote"
-                placeholder="مثلاً مشتری در جریان قرار گرفت"
-              >
-
-            </div>
-
-            <button
-              class="primary-btn"
-              onclick="saveCase('${esc(c.id)}')"
-            >
-              ذخیره تغییرات پرونده
-            </button>
-
-          </div>
-
-          <div
-            class="detail-description"
-          >
-
-            <span>
-              کارها و دستمزد
-            </span>
-
-            <div class="records">
-
-              ${
-                tasks.length
-
-                  ? tasks
-                      .map(t => `
-
-                        <div
-                          class="mini-record"
-                        >
-
-                          <div class="avatar">
-                            🔧
-                          </div>
-
-                          <div>
-
-                            <strong>
-                              ${esc(
-                                t.title ||
-                                'کار'
-                              )}
-                            </strong>
-
-                            <span>
-
-                              ${esc(
-                                t.technician_name ||
-                                t.technician?.name ||
-                                ''
-                              )}
-
-                              ${
-                                t.status
-                                  ? ' • ' +
-                                    esc(
-                                      taskStatusText(
-                                        t.status
-                                      )
-                                    )
-                                  : ''
-                              }
-
-                            </span>
-
-                            <small>
-                              ${money(
-                                t.labor_cost ||
-                                0
-                              )}
-                              تومان
-                            </small>
-
-                          </div>
-
-                          <button
-                            class="secondary-btn small-btn"
-                            onclick="deleteCaseTask('${esc(t.id)}','${esc(c.id)}')"
-                          >
-                            حذف
-                          </button>
-
-                        </div>
-
-                      `)
-                      .join('')
-
-                  : `
-                    <p>
-                      هنوز کاری ثبت نشده است.
-                    </p>
-                  `
-              }
-
-            </div>
-
-            <div class="status-editor">
-
-              <div class="field">
-
-                <label>
-                  عنوان کار
-                </label>
-
-                <input
-                  id="newTaskTitle"
-                  placeholder="مثلاً تعویض روغن و فیلتر"
-                >
-
-              </div>
-
-              <div class="field">
-
-                <label>
-                  شرح کار
-                </label>
-
-                <textarea
-                  id="newTaskDescription"
-                  rows="2"
-                  placeholder="شرح اجرای کار"
-                ></textarea>
-
-              </div>
-
-              <div class="field">
-
-                <label>
-                  تکنسین
-                </label>
-
-                <select
-                  id="newTaskTechnician"
-                >
-
-                  <option value="">
-                    بدون تخصیص
-                  </option>
-
-                  ${
-                    technicians
-                      .map(t => `
-                        <option
-                          value="${esc(t.id)}"
-                        >
-                          ${esc(t.name)}
-                        </option>
-                      `)
-                      .join('')
-                  }
-
-                </select>
-
-              </div>
-
-              <div class="field">
-
-                <label>
-                  دستمزد (تومان)
-                </label>
-
-                <input
-                  id="newTaskLabor"
-                  type="number"
-                  min="0"
-                  step="1000"
-                  placeholder="0"
-                >
-
-              </div>
-
-              <button
-                class="primary-btn"
-                onclick="addCaseTask('${esc(c.id)}')"
-              >
-                + ثبت کار
-              </button>
-
-            </div>
-
-          </div>
-
-          <div
-            class="detail-description"
-          >
-
-            <span>
-              قطعات مصرفی
-            </span>
-
-            <div class="records">
-
-              ${
-                parts.length
-
-                  ? parts
-                      .map(p => `
-
-                        <div
-                          class="mini-record"
-                        >
-
-                          <div class="avatar">
-                            ⚙️
-                          </div>
-
-                          <div>
-
-                            <strong>
-                              ${esc(
-                                p.part_name ||
-                                p.name ||
-                                'قطعه'
-                              )}
-                            </strong>
-
-                            <span>
-                              تعداد:
-                              ${money(
-                                p.quantity ||
-                                0
-                              )}
-                            </span>
-
-                            <small>
-                              ${money(
-                                p.unit_price ||
-                                0
-                              )}
-                              تومان
-                            </small>
-
-                          </div>
-
-                          <button
-                            class="secondary-btn small-btn"
-                            onclick="deleteCasePart('${esc(p.id)}','${esc(c.id)}')"
-                          >
-                            حذف
-                          </button>
-
-                        </div>
-
-                      `)
-                      .join('')
-
-                  : `
-                    <p>
-                      هنوز قطعه‌ای ثبت نشده است.
-                    </p>
-                  `
-              }
-
-            </div>
-
-            <div class="status-editor">
-
-              <div class="field">
-
-                <label>
-                  نام قطعه
-                </label>
-
-                <input
-                  id="newPartName"
-                  placeholder="مثلاً لنت ترمز"
-                >
-
-              </div>
-
-              <div class="field">
-
-                <label>
-                  تعداد
-                </label>
-
-                <input
-                  id="newPartQty"
-                  type="number"
-                  min="1"
-                  step="1"
-                  value="1"
-                >
-
-              </div>
-
-              <div class="field">
-
-                <label>
-                  قیمت واحد (تومان)
-                </label>
-
-                <input
-                  id="newPartPrice"
-                  type="number"
-                  min="0"
-                  step="1000"
-                  placeholder="0"
-                >
-
-              </div>
-
-              <button
-                class="primary-btn"
-                onclick="addCasePart('${esc(c.id)}')"
-              >
-                + ثبت قطعه
-              </button>
-
-            </div>
-
-          </div>
-
-          <div
-            class="detail-description"
-          >
-
-            <span>
-              برآورد و تأیید هزینه
-            </span>
-
-            <div class="detail-grid">
-
-              <div class="detail-item">
-
-                <span>
-                  اجرت
-                </span>
-
-                <strong>
-                  ${money(
-                    financial.laborTotal ||
-                    0
-                  )}
-                  تومان
-                </strong>
-
-              </div>
-
-              <div class="detail-item">
-
-                <span>
-                  قطعات
-                </span>
-
-                <strong>
-                  ${money(
-                    financial.partsTotal ||
-                    0
-                  )}
-                  تومان
-                </strong>
-
-              </div>
-
-              <div class="detail-item">
-
-                <span>
-                  جمع
-                </span>
-
-                <strong>
-                  ${money(
-                    financial.subtotal ||
-                    financial.total ||
-                    0
-                  )}
-                  تومان
-                </strong>
-
-              </div>
-
-              <div class="detail-item">
-
-                <span>
-                  تخفیف
-                </span>
-
-                <strong>
-                  ${money(
-                    estimate?.discount ||
-                    0
-                  )}
-                  تومان
-                </strong>
-
-              </div>
-
-              <div class="detail-item">
-
-                <span>
-                  وضعیت
-                </span>
-
-                <strong>
-                  ${esc(
-                    estimate?.status ||
-                    'DRAFT'
-                  )}
-                </strong>
-
-              </div>
-
-              <div class="detail-item">
-
-                <span>
-                  مبلغ نهایی
-                </span>
-
-                <strong>
-                  ${money(
-                    estimate?.total ||
-                    financial.total ||
-                    0
-                  )}
-                  تومان
-                </strong>
-
-              </div>
-
-            </div>
-
-            <div class="status-editor">
-
-              <div class="field">
-
-                <label>
-                  تخفیف (تومان)
-                </label>
-
-                <input
-                  id="caseDiscount"
-                  type="number"
-                  min="0"
-                  step="1000"
-                  value="${Number(
-                    estimate?.discount ||
-                    0
-                  )}"
-                >
-
-              </div>
-
-              <button
-                class="primary-btn"
-                onclick="saveCaseEstimate('${esc(c.id)}')"
-              >
-                محاسبه و ذخیره برآورد
-              </button>
-
-              ${
-                estimate?.status ===
-                'APPROVED'
-
-                  ? `
-                    <span
-                      class="badge status-progress"
-                    >
-                      برآورد تأیید شده
-                    </span>
-                  `
-
-                  : `
-                    <button
-                      class="secondary-btn"
-                      onclick="approveCaseEstimate('${esc(c.id)}')"
-                    >
-                      تأیید هزینه و شروع تعمیر
-                    </button>
-                  `
-              }
-
-            </div>
-
-          </div>
-
-          <div
-            class="detail-description"
-          >
-
-            <span>
-              پرداخت‌ها
-            </span>
-
-            <div class="records">
-
-              ${
-                payments.length
-
-                  ? payments
-                      .map(p => `
-
-                        <div
-                          class="mini-record"
-                        >
-
-                          <div class="avatar">
-                            💳
-                          </div>
-
-                          <div>
-
-                            <strong>
-                              ${money(
-                                p.amount ||
-                                0
-                              )}
-                              تومان
-                            </strong>
-
-                            <span>
-                              ${esc(
-                                paymentMethodText(
-                                  p.method
-                                )
-                              )}
-                            </span>
-
-                            <small>
-                              ${esc(
-                                p.reference ||
-                                ''
-                              )}
-                            </small>
-
-                          </div>
-
-                        </div>
-
-                      `)
-                      .join('')
-
-                  : `
-                    <p>
-                      پرداختی ثبت نشده است.
-                    </p>
-                  `
-              }
-
-            </div>
-
-            <div class="status-editor">
-
-              <div class="field">
-
-                <label>
-                  مبلغ پرداخت
-                </label>
-
-                <input
-                  id="newPaymentAmount"
-                  type="number"
-                  min="1"
-                  step="1000"
-                  placeholder="0"
-                >
-
-              </div>
-
-              <div class="field">
-
-                <label>
-                  روش پرداخت
-                </label>
-
-                <select
-                  id="newPaymentMethod"
-                >
-
-                  <option value="CASH">
-                    نقدی
-                  </option>
-
-                  <option value="CARD">
-                    کارت
-                  </option>
-
-                  <option value="TRANSFER">
-                    کارت‌به‌کارت / انتقال
-                  </option>
-
-                </select>
-
-              </div>
-
-              <div class="field">
-
-                <label>
-                  شماره پیگیری
-                </label>
-
-                <input
-                  id="newPaymentReference"
-                  placeholder="اختیاری"
-                >
-
-              </div>
-
-              <button
-                class="primary-btn"
-                onclick="addCasePayment('${esc(c.id)}')"
-              >
-                + ثبت پرداخت
-              </button>
-
-            </div>
-
-          </div>
-
-          <div
-            class="detail-description"
-          >
-
-            <span>
-              یادداشت‌ها
-            </span>
-
-            <div class="records">
-
-              ${
-                notes.length
-
-                  ? notes
-                      .map(n => `
-
-                        <div
-                          class="mini-record"
-                        >
-
-                          <div class="avatar">
-                            📝
-                          </div>
-
-                          <div>
-
-                            <strong>
-                              ${esc(
-                                n.body ||
-                                n.note ||
-                                ''
-                              )}
-                            </strong>
-
-                            <small>
-                              ${esc(
-                                n.created_at ||
-                                ''
-                              )}
-                            </small>
-
-                          </div>
-
-                        </div>
-
-                      `)
-                      .join('')
-
-                  : `
-                    <p>
-                      یادداشتی ثبت نشده است.
-                    </p>
-                  `
-              }
-
-            </div>
-
-            <div class="status-editor">
-
-              <div class="field">
-
-                <label>
-                  یادداشت جدید
-                </label>
-
-                <textarea
-                  id="newCaseNote"
-                  rows="3"
-                  placeholder="یادداشت داخلی پرونده..."
-                ></textarea>
-
-              </div>
-
-              <button
-                class="primary-btn"
-                onclick="addCaseNote('${esc(c.id)}')"
-              >
-                + ثبت یادداشت
-              </button>
-
-            </div>
-
-          </div>
-
-          <div
-            class="detail-description"
-          >
-
-            <span>
-              تاریخچه پرونده
-            </span>
-
-            <div class="records">
-
-              ${
-                history.length
-
-                  ? history
-                      .map(h => `
-
-                        <div
-                          class="mini-record"
-                        >
-
-                          <div class="avatar">
-                            ↻
-                          </div>
-
-                          <div>
-
-                            <strong>
-                              ${esc(
-                                statusText(
-                                  h.status ||
-                                  ''
-                                )
-                              )}
-                            </strong>
-
-                            <small>
-                              ${esc(
-                                h.note ||
-                                ''
-                              )}
-                              ${esc(
-                                h.created_at ||
-                                ''
-                              )}
-                            </small>
-
-                          </div>
-
-                        </div>
-
-                      `)
-                      .join('')
-
-                  : `
-                    <p>
-                      تاریخچه‌ای ثبت نشده است.
-                    </p>
-                  `
-              }
-
-            </div>
-
-          </div>
-
-        </div>
-
-      </section>
-    `;
-
-  } catch (err) {
-
-    root.innerHTML = `
-
-      <section class="section">
-
-        <div class="panel">
-
-          <div class="status-result">
-            ${esc(
-              err.message ||
-              'دریافت جزئیات پرونده انجام نشد'
-            )}
-          </div>
-
-          <button
-            class="secondary-btn"
-            onclick="renderAdminPage('cases')"
-          >
-            بازگشت
-          </button>
-
-        </div>
-
-      </section>
-    `;
-  }
-}
-
-function statusOptions(current) {
-
-  const options = [
-
-    [
-      'OPEN',
-      'باز'
-    ],
-
-    [
-      'IN_PROGRESS',
-      'در حال بررسی'
-    ],
-
-    [
-      'WAITING_APPROVAL',
-      'در انتظار تأیید'
-    ],
-
-    [
-      'APPROVED',
-      'تأیید شده'
-    ],
-
-    [
-      'REPAIRING',
-      'در حال تعمیر'
-    ],
-
-    [
-      'READY_FOR_DELIVERY',
-      'آماده تحویل'
-    ],
-
-    [
-      'DELIVERED',
-      'تحویل شده'
-    ],
-
-    [
-      'CANCELLED',
-      'لغو شده'
-    ]
-
-  ];
-
-  return options
-    .map(
-      ([value, label]) => `
-
-        <option
-          value="${value}"
-          ${
-            String(current) ===
-            value
-              ? 'selected'
-              : ''
-          }
-        >
-          ${label}
-        </option>
-
-      `
-    )
-    .join('');
-}
-
-function taskStatusText(status) {
-
-  return (
-    {
-      TODO:
-        'در انتظار',
-
-      IN_PROGRESS:
-        'در حال انجام',
-
-      DONE:
-        'انجام شد',
-
-      CANCELLED:
-        'لغو شد'
-
-    }[
-      status
-    ] ||
-    status ||
-    'ثبت شده'
-  );
-}
-
-function paymentMethodText(method) {
-
-  return (
-    {
-      CASH:
-        'نقدی',
-
-      CARD:
-        'کارت',
-
-      TRANSFER:
-        'انتقال',
-
-      ONLINE:
-        'آنلاین'
-
-    }[
-      String(
-        method ||
-        ''
-      ).toUpperCase()
-    ] ||
-    method ||
-    'پرداخت'
-  );
-}
-
-async function saveCase(id) {
-
-  const status =
-    $('caseStatus')
-      ?.value ||
-    'OPEN';
-
-  const complaint =
-    $('caseComplaint')
-      ?.value
-      .trim() ||
-    '';
-
-  const diagnosis =
-    $('caseDiagnosis')
-      ?.value
-      .trim() ||
-    '';
-
-  const note =
-    $('caseStatusNote')
-      ?.value
-      .trim() ||
-    '';
-
-  try {
-
-    await api(
-      `/cases/${encodeURIComponent(id)}`,
-      {
-        method: 'PATCH',
-
-        body:
-          JSON.stringify({
-            complaint,
-            diagnosis
-          })
-      }
-    );
-
-    await api(
-      `/cases/${encodeURIComponent(id)}/status`,
-      {
-        method: 'PATCH',
-
-        body:
-          JSON.stringify({
-            status,
-            note
-          })
-      }
-    );
-
-    toast(
-      'تغییرات پرونده با موفقیت ذخیره شد'
-    );
-
-    await loadAdminData();
-
-    await openAdminCase(
-      id
-    );
-
-  } catch (err) {
-
-    toast(
-      err.message ||
-      'ذخیره پرونده انجام نشد'
-    );
-  }
-}
-
-/* =========================
-   ESTIMATE
-   ========================= */
-
-async function saveCaseEstimate(id) {
-
-  const discount =
-    Math.max(
-      0,
-      Number(
-        $('caseDiscount')
-          ?.value ||
-        0
-      )
-    );
-
-  try {
-
-    await api(
-      `/cases/${encodeURIComponent(id)}/estimate`,
-      {
-        method: 'POST',
-
-        body:
-          JSON.stringify({
-            discount
-          })
-      }
-    );
-
-    toast(
-      'برآورد با موفقیت ذخیره شد'
-    );
-
-    await openAdminCase(
-      id
-    );
-
-  } catch (err) {
-
-    toast(
-      err.message ||
-      'ذخیره برآورد انجام نشد'
-    );
-  }
-}
-
-async function approveCaseEstimate(id) {
-
-  const discount =
-    Math.max(
-      0,
-      Number(
-        $('caseDiscount')
-          ?.value ||
-        0
-      )
-    );
-
-  try {
-
-    await api(
-      `/cases/${encodeURIComponent(id)}/estimate`,
-      {
-        method: 'POST',
-
-        body:
-          JSON.stringify({
-            discount
-          })
-      }
-    );
-
-    await api(
-      `/cases/${encodeURIComponent(id)}/status`,
-      {
-        method: 'PATCH',
-
-        body:
-          JSON.stringify({
-            status:
-              'APPROVED',
-
-            note:
-              'برآورد هزینه تأیید شد'
-          })
-      }
-    );
-
-    toast(
-      'برآورد تأیید شد'
-    );
-
-    await loadAdminData();
-
-    await openAdminCase(
-      id
-    );
-
-  } catch (err) {
-
-    toast(
-      err.message ||
-      'تأیید برآورد انجام نشد'
-    );
-  }
-}
-
-/* =========================
-   TASKS
-   ========================= */
-
-async function addCaseTask(caseId) {
-
-  const title =
-    $('newTaskTitle')
-      ?.value
-      .trim() ||
-    '';
-
-  const description =
-    $('newTaskDescription')
-      ?.value
-      .trim() ||
-    '';
-
-  const technician_id =
-    $('newTaskTechnician')
-      ?.value ||
-    null;
-
-  const labor_cost =
-    Math.max(
-      0,
-      Number(
-        $('newTaskLabor')
-          ?.value ||
-        0
-      )
-    );
-
-  if (!title) {
-
-    toast(
-      'عنوان کار را وارد کنید'
-    );
-
-    return;
-  }
-
-  try {
-
-    await api(
-      '/tasks',
-      {
-        method: 'POST',
-
-        body:
-          JSON.stringify({
-            case_id:
-              caseId,
-
-            title,
-
-            description,
-
-            technician_id,
-
-            labor_cost,
-
-            status:
-              'TODO'
-          })
-      }
-    );
-
-    toast(
-      'کار ثبت شد'
-    );
-
-    await openAdminCase(
-      caseId
-    );
-
-  } catch (err) {
-
-    toast(
-      err.message ||
-      'ثبت کار انجام نشد'
-    );
-  }
-}
-
-async function deleteCaseTask(
-  taskId,
-  caseId
-) {
-
-  if (
-    !confirm(
-      'این کار حذف شود؟'
-    )
-  ) {
-
-    return;
-  }
-
-  try {
-
-    await api(
-      `/tasks/${encodeURIComponent(taskId)}`,
-      {
-        method:
-          'DELETE'
-      }
-    );
-
-    toast(
-      'کار حذف شد'
-    );
-
-    await openAdminCase(
-      caseId
-    );
-
-  } catch (err) {
-
-    toast(
-      err.message ||
-      'حذف کار انجام نشد'
-    );
-  }
-}
-
-/* =========================
-   PARTS
-   ========================= */
-
-async function addCasePart(caseId) {
-
-  const name =
-    $('newPartName')
-      ?.value
-      .trim() ||
-    '';
-
-  const quantity =
-    Math.max(
-      1,
-      Number(
-        $('newPartQty')
-          ?.value ||
-        1
-      )
-    );
-
-  const unit_price =
-    Math.max(
-      0,
-      Number(
-        $('newPartPrice')
-          ?.value ||
-        0
-      )
-    );
-
-  if (!name) {
-
-    toast(
-      'نام قطعه را وارد کنید'
-    );
-
-    return;
-  }
-
-  try {
-
-    await api(
-      `/cases/${encodeURIComponent(caseId)}/parts`,
-      {
-        method:
-          'POST',
-
-        body:
-          JSON.stringify({
-            name,
-            quantity,
-            unit_price
-          })
-      }
-    );
-
-    toast(
-      'قطعه ثبت شد'
-    );
-
-    await openAdminCase(
-      caseId
-    );
-
-  } catch (err) {
-
-    toast(
-      err.message ||
-      'ثبت قطعه انجام نشد'
-    );
-  }
-}
-
-async function deleteCasePart(
-  partId,
-  caseId
-) {
-
-  if (
-    !confirm(
-      'این قطعه از پرونده حذف شود؟'
-    )
-  ) {
-
-    return;
-  }
-
-  try {
-
-    await api(
-      `/case-parts/${encodeURIComponent(partId)}`,
-      {
-        method:
-          'DELETE'
-      }
-    );
-
-    toast(
-      'قطعه حذف شد'
-    );
-
-    await openAdminCase(
-      caseId
-    );
-
-  } catch (err) {
-
-    toast(
-      err.message ||
-      'حذف قطعه انجام نشد'
-    );
-  }
-}
-
-/* =========================
-   PAYMENTS
-   ========================= */
-
-async function addCasePayment(
-  caseId
-) {
-
-  const amount =
-    Math.max(
-      0,
-      Number(
-        $('newPaymentAmount')
-          ?.value ||
-        0
-      )
-    );
-
-  const method =
-    $('newPaymentMethod')
-      ?.value ||
-    'CASH';
-
-  const reference =
-    $('newPaymentReference')
-      ?.value
-      .trim() ||
-    '';
-
-  if (!amount) {
-
-    toast(
-      'مبلغ پرداخت را وارد کنید'
-    );
-
-    return;
-  }
-
-  try {
-
-    await api(
-      '/payments',
-      {
-        method:
-          'POST',
-
-        body:
-          JSON.stringify({
-            case_id:
-              caseId,
-
-            amount,
-
-            method,
-
-            reference
-          })
-      }
-    );
-
-    toast(
-      'پرداخت ثبت شد'
-    );
-
-    await loadAdminData();
-
-    await openAdminCase(
-      caseId
-    );
-
-  } catch (err) {
-
-    toast(
-      err.message ||
-      'ثبت پرداخت انجام نشد'
-    );
-  }
-}
-
-/* =========================
-   NOTES
-   ========================= */
-
-async function addCaseNote(
-  caseId
-) {
-
-  const body =
-    $('newCaseNote')
-      ?.value
-      .trim() ||
-    '';
-
-  if (!body) {
-
-    toast(
-      'متن یادداشت را وارد کنید'
-    );
-
-    return;
-  }
-
-  try {
-
-    await api(
-      `/cases/${encodeURIComponent(caseId)}/notes`,
-      {
-        method:
-          'POST',
-
-        body:
-          JSON.stringify({
-            body
-          })
-      }
-    );
-
-    toast(
-      'یادداشت ثبت شد'
-    );
-
-    await openAdminCase(
-      caseId
-    );
-
-  } catch (err) {
-
-    toast(
-      err.message ||
-      'ثبت یادداشت انجام نشد'
-    );
-  }
-}
-
-/* =========================
-   RECEPTION
-   ========================= */
-
-function renderAdminReception(root) {
-
-  root.innerHTML = `
-
-    <section class="section">
-
-      <div class="section-heading">
-
-        <div>
-
-          <span class="eyebrow">
-            NEW WORK ORDER
-          </span>
-
-          <h2>
-            پذیرش جدید
-          </h2>
-
-          <p>
-            ثبت مشتری، موتورسیکلت و درخواست تعمیر
-          </p>
-
-        </div>
-
-      </div>
-
-      <div class="workspace">
-
-        <div class="panel">
-
-          <div class="panel-title">
-
-            <h3>
-              اطلاعات مشتری
-            </h3>
-
-            <span class="section-number">
-              01
-            </span>
-
-          </div>
-
-          <form
-            class="case-form"
-            onsubmit="submitReception(event)"
-          >
-
-            <div class="field">
-
-              <label>
-                نام و نام خانوادگی
-              </label>
-
-              <input
-                id="adminCustomerName"
-                required
-              >
-
-            </div>
-
-            <div class="field">
-
-              <label>
-                موبایل
-              </label>
-
-              <input
-                id="adminCustomerPhone"
-                inputmode="tel"
-                required
-              >
-
-            </div>
-
-            <div class="panel-title">
-
-              <h3>
-                موتورسیکلت
-              </h3>
-
-              <span class="section-number">
-                02
-              </span>
-
-            </div>
-
-            <div class="field">
-
-              <label>
-                برند / مدل
-              </label>
-
-              <input
-                id="adminBikeModel"
-                required
-              >
-
-            </div>
-
-            <div class="field">
-
-              <label>
-                پلاک / شناسه
-              </label>
-
-              <input
-                id="adminBikePlate"
-                required
-              >
-
-            </div>
-
-            <div class="field">
-
-              <label>
-                کیلومتر
-              </label>
-
-              <input
-                id="adminBikeKm"
-                inputmode="numeric"
-              >
-
-            </div>
-
-            <div class="panel-title">
-
-              <h3>
-                درخواست تعمیر
-              </h3>
-
-              <span class="section-number">
-                03
-              </span>
-
-            </div>
-
-            <div class="field">
-
-              <label>
-                شرح مشکل
-              </label>
-
-              <textarea
-                id="adminProblem"
-                rows="6"
-                required
-              ></textarea>
-
-            </div>
-
-            <button
-              class="primary-btn"
-              type="submit"
-            >
-              ثبت پذیرش
-            </button>
-
-          </form>
-
-        </div>
-
-      </div>
-
-    </section>
-  `;
-}
-
-async function submitReception(event) {
-
-  event.preventDefault();
-
-  const name =
-    $('adminCustomerName')
-      .value
-      .trim();
-
-  const phone =
-    $('adminCustomerPhone')
-      .value
-      .trim();
-
-  const model =
-    $('adminBikeModel')
-      .value
-      .trim();
-
-  const plate =
-    $('adminBikePlate')
-      .value
-      .trim();
-
-  const mileageRaw =
-    $('adminBikeKm')
-      .value
-      .trim();
-
-  const complaint =
-    $('adminProblem')
-      .value
-      .trim();
-
-  if (
-    !name ||
-    !phone ||
-    !model ||
-    !plate ||
-    !complaint
-  ) {
-
-    toast(
-      'نام، موبایل، مدل، پلاک و شرح مشکل الزامی است'
-    );
-
-    return;
-  }
-
-  try {
-
-    let customer =
-      state.customers.find(
-        c =>
-          String(
-            c.phone ||
-            ''
-          )
-            .replace(
-              /\D/g,
-              ''
-            ) ===
-          phone.replace(
-            /\D/g,
-            ''
-          )
-      );
-
-    if (!customer) {
-
-      const created =
-        await api(
-          '/customers',
-          {
-            method:
-              'POST',
-
-            body:
-              JSON.stringify({
-                name,
-                phone
-              })
-          }
-        );
-
-      customer =
-        created?.customer ||
-        created?.data;
-    }
-
-    if (!customer?.id) {
-
-      throw new Error(
-        'ثبت یا یافتن مشتری انجام نشد'
-      );
-    }
-
-    const customerBikes =
-      extractMotorcycles(
-        await api(
-          `/motorcycles?customer_id=${encodeURIComponent(customer.id)}`
-        )
-      );
-
-    let motorcycle =
-      customerBikes.find(
-        m =>
-          String(
-            m.plate ||
-            m.plate_number ||
-            ''
-          ).trim() ===
-          plate
-      );
-
-    if (!motorcycle) {
-
-      const createdBike =
-        await api(
-          '/motorcycles',
-          {
-            method:
-              'POST',
-
-            body:
-              JSON.stringify({
-                customer_id:
-                  customer.id,
-
-                plate,
-
-                model,
-
-                brand:
-                  '',
-
-                mileage:
-                  mileageRaw
-                    ? Number(
-                        mileageRaw
-                      )
-                    : null
-              })
-          }
-        );
-
-      motorcycle =
-        createdBike?.motorcycle ||
-        createdBike?.data;
-    }
-
-    if (!motorcycle?.id) {
-
-      throw new Error(
-        'ثبت یا یافتن موتورسیکلت انجام نشد'
-      );
-    }
-
-    const createdCase =
-      await api(
-        '/cases',
-        {
-          method:
-            'POST',
-
-          body:
-            JSON.stringify({
-              customer_id:
-                customer.id,
-
-              motorcycle_id:
-                motorcycle.id,
-
-              complaint,
-
-              status:
-                'OPEN',
-
-              priority:
-                'NORMAL'
-            })
-        }
-      );
-
-    const newCase =
-      createdCase?.case ||
-      createdCase?.data ||
-      createdCase;
-
-    toast(
-      `پذیرش با موفقیت ثبت شد${
-        newCase?.case_code
-          ? ' • کد: ' +
-            newCase.case_code
-          : ''
-      }`
-    );
-
-    event.target.reset();
-
-    await loadAdminData();
-
-    renderAdminPage(
-      'dashboard'
-    );
-
-  } catch (err) {
-
-    toast(
-      err.message ||
-      'ثبت پذیرش انجام نشد'
-    );
-  }
-}
-
-/* =========================
-   WORKSHOP
-   ========================= */
-
-function renderAdminWorkshop(root) {
-
-  const active =
-    state.cases.filter(
-      c =>
-        !isClosedCase(
-          c.status
-        )
-    );
-
-  const groups = [
-
-    [
-      'OPEN',
-      'باز'
-    ],
-
-    [
-      'IN_PROGRESS',
-      'در حال بررسی'
-    ],
-
-    [
-      'WAITING_APPROVAL',
-      'در انتظار تأیید'
-    ],
-
-    [
-      'APPROVED',
-      'تأیید شده'
-    ],
-
-    [
-      'REPAIRING',
-      'در حال تعمیر'
-    ],
-
-    [
-      'READY_FOR_DELIVERY',
-      'آماده تحویل'
-    ]
-
-  ];
-
-  root.innerHTML = `
-
-    <section class="section">
-
-      <div class="section-heading">
-
-        <div>
-
-          <span class="eyebrow">
-            WORKSHOP CONTROL
-          </span>
-
-          <h2>
-            تعمیرگاه عملیاتی
-          </h2>
-
-          <p>
-            مدیریت سریع پرونده‌ها از پذیرش تا تحویل
-          </p>
-
-        </div>
-
-        <button
-          class="primary-btn"
-          onclick="loadAdminData().then(()=>renderAdminPage('workshop'))"
-        >
-          به‌روزرسانی
-        </button>
-
-      </div>
-
-      <div class="stats-grid">
-
-        <div class="stat-card">
-
-          <div class="stat-icon">
-            🏍
-          </div>
-
-          <strong>
-            ${active.length}
-          </strong>
-
-          <span>
-            پرونده فعال
-          </span>
-
-        </div>
-
-        <div class="stat-card">
-
-          <div class="stat-icon">
-            ⏳
-          </div>
-
-          <strong>
-            ${
-              active.filter(
-                c =>
-                  c.status ===
-                  'WAITING_APPROVAL'
-              ).length
-            }
-          </strong>
-
-          <span>
-            در انتظار تأیید
-          </span>
-
-        </div>
-
-        <div class="stat-card">
-
-          <div class="stat-icon">
-            🔧
-          </div>
-
-          <strong>
-            ${
-              active.filter(
-                c =>
-                  [
-                    'APPROVED',
-                    'REPAIRING'
-                  ].includes(
-                    c.status
-                  )
-              ).length
-            }
-          </strong>
-
-          <span>
-            در حال تعمیر
-          </span>
-
-        </div>
-
-        <div class="stat-card">
-
-          <div class="stat-icon">
-            ✓
-          </div>
-
-          <strong>
-            ${
-              active.filter(
-                c =>
-                  c.status ===
-                  'READY_FOR_DELIVERY'
-              ).length
-            }
-          </strong>
-
-          <span>
-            آماده تحویل
-          </span>
-
-        </div>
-
-      </div>
-
-      <div class="panel">
-
-        ${
-          groups
-            .map(
-              ([
-                status,
-                label
-              ]) => {
-
-                const items =
-                  active.filter(
-                    c =>
-                      c.status ===
-                      status
-                  );
-
-                return `
-
-                  <div
-                    class="detail-description"
-                  >
-
-                    <span>
-                      ${label}
-
-                      <small>
-                        (${items.length})
-                      </small>
-                    </span>
-
-                    <div
-                      class="records"
-                    >
-
-                      ${
-                        items.length
-
-                          ? renderAdminCaseRows(
-                              items
-                            )
-
-                          : `
-                            <p>
-                              پرونده‌ای در این مرحله نیست.
-                            </p>
-                          `
-                      }
-
-                    </div>
-
-                  </div>
-                `;
-              }
-            )
-            .join('')
-        }
-
-      </div>
-
-    </section>
-  `;
-}
-
-/* =========================
-   LOGOUT
-   ========================= */
-
-async function logout() {
-
-  try {
-
-    if (token()) {
-
-      await api(
-        '/auth/logout',
-        {
-          method:
-            'POST'
-        }
-      );
-    }
-
-  } catch {}
-
-  clearSession();
-
-  renderPublic();
-
-  window.scrollTo(
-    0,
-    0
-  );
-
-  toast(
-    'از حساب مدیریت خارج شدید'
-  );
-}
-
-/* =========================
-   UI
-   ========================= */
-
-function scrollToId(id) {
-
-  document
-    .getElementById(id)
-    ?.scrollIntoView({
-      behavior:
-        'smooth'
-    });
-}
-
-/* =========================
-   BOOT
-   ========================= */
-
-async function boot() {
-
-  loadSession();
-
-  if (
-    state.user &&
-    token()
-  ) {
-
-    try {
-
-      const me =
-        await api(
-          '/auth/me'
-        );
-
-      state.user =
-        me?.user ||
-        me?.account ||
-        me;
-
-      localStorage.setItem(
-        USER_KEY,
-        JSON.stringify(
-          state.user
-        )
-      );
-
-      await loadAdminData();
-
-      renderAdmin();
-
-      return;
-
-    } catch {
-
-      clearSession();
-    }
-  }
-
-  await loadPublicCases();
-
-  renderPublic();
-}
-
-document.addEventListener(
-  'DOMContentLoaded',
-  boot
-);
-
-/* =========================
-   GLOBALS
-   ========================= */
-
-window.showLogin =
-  showLogin;
-
-window.submitLogin =
-  submitLogin;
-
-window.trackCase =
-  trackCase;
-
-window.submitRequest =
-  submitRequest;
-
-window.scrollToId =
-  scrollToId;
-
-window.logout =
-  logout;
-
-window.renderAdminPage =
-  renderAdminPage;
-
-window.filterAdminCases =
-  filterAdminCases;
-
-window.openAdminCase =
-  openAdminCase;
-
-window.saveCase =
-  saveCase;
-
-window.submitReception =
-  submitReception;
-
-window.saveCaseEstimate =
-  saveCaseEstimate;
-
-window.approveCaseEstimate =
-  approveCaseEstimate;
-
-window.addCaseTask =
-  addCaseTask;
-
-window.deleteCaseTask =
-  deleteCaseTask;
-
-window.addCasePart =
-  addCasePart;
-
-window.deleteCasePart =
-  deleteCasePart;
-
-window.addCasePayment =
-  addCasePayment;
-
-window.addCaseNote =
-  addCaseNote;
+             
