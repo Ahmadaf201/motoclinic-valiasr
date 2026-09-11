@@ -827,7 +827,6 @@ function renderPublic() {
    ========================= */
 
 async function trackCase(event) {
-
   event.preventDefault();
 
   const code =
@@ -854,7 +853,6 @@ async function submitRequest(event) {
   event.preventDefault();
 
   const payload = {
-
     name:
       $('requestName').value.trim(),
 
@@ -869,7 +867,6 @@ async function submitRequest(event) {
 
     description:
       $('requestProblem').value.trim()
-
   };
 
   try {
@@ -1468,9 +1465,7 @@ function renderAdminDashboard(root) {
 
           <button
             class="secondary-btn"
-            onclick="
-              renderAdminPage('cases')
-            "
+            onclick="renderAdminPage('cases')"
           >
             مشاهده همه
           </button>
@@ -1488,7 +1483,6 @@ function renderAdminDashboard(root) {
       </div>
 
     </section>
-
   `;
 }
 
@@ -1518,9 +1512,7 @@ function renderAdminCases(root) {
 
         <button
           class="primary-btn"
-          onclick="
-            renderAdminPage('reception')
-          "
+          onclick="renderAdminPage('reception')"
         >
           + پذیرش جدید
         </button>
@@ -1533,12 +1525,8 @@ function renderAdminCases(root) {
 
           <input
             id="adminCaseSearch"
-            placeholder="
-              جستجوی نام، موبایل، موتور یا کد...
-            "
-            oninput="
-              filterAdminCases()
-            "
+            placeholder="جستجوی نام، موبایل، موتور یا کد..."
+            oninput="filterAdminCases()"
           >
 
         </div>
@@ -1557,7 +1545,6 @@ function renderAdminCases(root) {
       </div>
 
     </section>
-
   `;
 }
 
@@ -1567,8 +1554,7 @@ function filterAdminCases() {
     $('adminCaseSearch')
       ?.value
       ?.trim()
-      ?.toLowerCase() ||
-    '';
+      ?.toLowerCase() || '';
 
   const list =
     state.cases.filter(
@@ -1585,7 +1571,6 @@ function filterAdminCases() {
 
     container.innerHTML =
       renderAdminCaseRows(list);
-
   }
 }
 
@@ -1629,9 +1614,7 @@ function renderAdminCaseRows(list) {
 
       <div
         class="mini-record"
-        onclick="
-          openAdminCase('${esc(c.id)}')
-        "
+        onclick="openAdminCase('${esc(c.id)}')"
       >
 
         <div class="avatar">
@@ -1646,16 +1629,11 @@ function renderAdminCaseRows(list) {
 
           <span>
             ${esc(bike)}
-            ${
-              phone
-                ? ' • ' + esc(phone)
-                : ''
-            }
+            ${phone ? ' • ' + esc(phone) : ''}
           </span>
 
           <small>
-            کد:
-            ${esc(caseCode(c))}
+            کد: ${esc(caseCode(c))}
           </small>
 
         </div>
@@ -1663,13 +1641,10 @@ function renderAdminCaseRows(list) {
         <span
           class="badge ${statusClass(c.status)}"
         >
-          ${esc(
-            statusText(c.status)
-          )}
+          ${esc(statusText(c.status))}
         </span>
 
       </div>
-
     `;
 
   }).join('');
@@ -1696,19 +1671,13 @@ async function openAdminCase(id) {
   if (!root) return;
 
   root.innerHTML = `
-
     <section class="section">
-
       <div class="panel">
-
         <div class="status-result">
           در حال دریافت جزئیات پرونده...
         </div>
-
       </div>
-
     </section>
-
   `;
 
   try {
@@ -1732,21 +1701,18 @@ async function openAdminCase(id) {
       null;
 
     const payments =
-      Array.isArray(
-        fresh?.payments
-      )
+      Array.isArray(fresh?.payments)
         ? fresh.payments
         : [];
 
     const notes =
-      Array.isArray(
-        fresh?.notes
-      )
+      Array.isArray(fresh?.notes)
         ? fresh.notes
         : [];
 
     const financial =
-      fresh?.financial || {
+      fresh?.financial ||
+      {
         total: 0,
         paid: 0,
         balance: 0
@@ -1798,9 +1764,7 @@ async function openAdminCase(id) {
 
           <button
             class="secondary-btn"
-            onclick="
-              renderAdminPage('cases')
-            "
+            onclick="renderAdminPage('cases')"
           >
             برگشت
           </button>
@@ -1819,4 +1783,1075 @@ async function openAdminCase(id) {
 
               <strong>
                 ${esc(customer)}
-             
+              </strong>
+
+            </div>
+
+            <span
+              class="badge ${statusClass(c.status)}"
+            >
+              ${esc(statusText(c.status))}
+            </span>
+
+          </div>
+
+          <div class="detail-grid">
+
+            <div class="detail-item">
+
+              <span>
+                موبایل
+              </span>
+
+              <strong>
+                ${esc(phone || '-')}
+              </strong>
+
+            </div>
+
+            <div class="detail-item">
+
+              <span>
+                موتورسیکلت
+              </span>
+
+              <strong>
+                ${esc(bike)}
+              </strong>
+
+            </div>
+
+            <div class="detail-item">
+
+              <span>
+                پلاک
+              </span>
+
+              <strong>
+                ${esc(plate || '-')}
+              </strong>
+
+            </div>
+
+            <div class="detail-item">
+
+              <span>
+                مبلغ کل
+              </span>
+
+              <strong>
+                ${money(financial.total)}
+                تومان
+              </strong>
+
+            </div>
+
+            <div class="detail-item">
+
+              <span>
+                پرداخت شده
+              </span>
+
+              <strong>
+                ${money(financial.paid)}
+                تومان
+              </strong>
+
+            </div>
+
+            <div class="detail-item">
+
+              <span>
+                مانده
+              </span>
+
+              <strong>
+                ${money(financial.balance)}
+                تومان
+              </strong>
+
+            </div>
+
+          </div>
+
+          <div class="detail-description">
+
+            <span>
+              شرح مشکل
+            </span>
+
+            <p>
+              ${esc(c.complaint || '-')}
+            </p>
+
+          </div>
+
+          <div class="detail-description">
+
+            <span>
+              تشخیص
+            </span>
+
+            <p>
+              ${esc(c.diagnosis || '-')}
+            </p>
+
+          </div>
+
+          <div class="status-editor">
+
+            <div class="field">
+
+              <label>
+                وضعیت پرونده
+              </label>
+
+              <select id="caseStatus">
+                ${statusOptions(c.status)}
+              </select>
+
+            </div>
+
+            <div class="field">
+
+              <label>
+                شرح مشکل
+              </label>
+
+              <textarea
+                id="caseComplaint"
+                rows="4"
+              >${esc(c.complaint || '')}</textarea>
+
+            </div>
+
+            <div class="field">
+
+              <label>
+                تشخیص
+              </label>
+
+              <textarea
+                id="caseDiagnosis"
+                rows="4"
+              >${esc(c.diagnosis || '')}</textarea>
+
+            </div>
+
+            <div class="field">
+
+              <label>
+                یادداشت وضعیت (اختیاری)
+              </label>
+
+              <input
+                id="caseStatusNote"
+                placeholder="مثلاً مشتری در جریان قرار گرفت"
+              >
+
+            </div>
+
+            <button
+              class="primary-btn"
+              onclick="saveCase('${esc(c.id)}')"
+            >
+              ذخیره تغییرات
+            </button>
+
+          </div>
+
+          <div class="detail-description">
+
+            <span>
+              کارهای ثبت‌شده
+            </span>
+
+            ${
+              tasks.length
+                ? `
+                  <div class="records">
+
+                    ${
+                      tasks.map(t => `
+
+                        <div class="mini-record">
+
+                          <div class="avatar">
+                            🔧
+                          </div>
+
+                          <div>
+
+                            <strong>
+                              ${esc(t.title || 'کار')}
+                            </strong>
+
+                            <span>
+                              ${esc(t.technician_name || '')}
+                              ${
+                                t.status
+                                  ? ' • ' + esc(t.status)
+                                  : ''
+                              }
+                            </span>
+
+                            <small>
+                              ${money(t.labor_cost || 0)}
+                              تومان
+                            </small>
+
+                          </div>
+
+                        </div>
+
+                      `).join('')
+                    }
+
+                  </div>
+                `
+                : `
+                  <p>
+                    هنوز کاری برای این پرونده ثبت نشده است.
+                  </p>
+                `
+            }
+
+          </div>
+
+          <div class="detail-description">
+
+            <span>
+              برآورد
+            </span>
+
+            <p>
+
+              ${
+                estimate
+                  ? `
+                    وضعیت:
+                    ${esc(estimate.status || '-')}
+                    • مبلغ:
+                    ${money(
+                      estimate.total ||
+                      financial.total
+                    )}
+                    تومان
+                  `
+                  : `
+                    هنوز برآوردی ثبت نشده است.
+                  `
+              }
+
+            </p>
+
+          </div>
+
+          <div class="detail-description">
+
+            <span>
+              پرداخت‌ها
+            </span>
+
+            <p>
+
+              ${
+                payments.length
+                  ? payments
+                      .map(
+                        p =>
+                          `${money(p.amount || 0)} تومان${
+                            p.method
+                              ? ' • ' + esc(p.method)
+                              : ''
+                          }`
+                      )
+                      .join(' | ')
+                  : `
+                    پرداختی ثبت نشده است.
+                  `
+              }
+
+            </p>
+
+          </div>
+
+          <div class="detail-description">
+
+            <span>
+              یادداشت‌ها
+            </span>
+
+            <p>
+
+              ${
+                notes.length
+                  ? notes
+                      .map(
+                        n =>
+                          esc(
+                            n.body ||
+                            n.note ||
+                            ''
+                          )
+                      )
+                      .join('<br>')
+                  : `
+                    یادداشتی ثبت نشده است.
+                  `
+              }
+
+            </p>
+
+          </div>
+
+        </div>
+
+      </section>
+    `;
+
+  } catch (err) {
+
+    root.innerHTML = `
+
+      <section class="section">
+
+        <div class="panel">
+
+          <div class="status-result">
+
+            ${esc(
+              err.message ||
+              'دریافت جزئیات پرونده انجام نشد'
+            )}
+
+          </div>
+
+          <button
+            class="secondary-btn"
+            onclick="renderAdminPage('cases')"
+          >
+            بازگشت
+          </button>
+
+        </div>
+
+      </section>
+    `;
+  }
+}
+
+function statusOptions(current) {
+
+  const options = [
+
+    ['OPEN', 'باز'],
+
+    [
+      'IN_PROGRESS',
+      'در حال بررسی'
+    ],
+
+    [
+      'WAITING_APPROVAL',
+      'در انتظار تأیید'
+    ],
+
+    [
+      'APPROVED',
+      'تأیید شده'
+    ],
+
+    [
+      'REPAIRING',
+      'در حال تعمیر'
+    ],
+
+    [
+      'QUALITY_CHECK',
+      'کنترل کیفیت'
+    ],
+
+    [
+      'READY_FOR_DELIVERY',
+      'آماده تحویل'
+    ],
+
+    [
+      'DELIVERED',
+      'تحویل شده'
+    ],
+
+    [
+      'CANCELLED',
+      'لغو شده'
+    ]
+
+  ];
+
+  return options
+    .map(
+      ([value, label]) =>
+        `
+        <option
+          value="${value}"
+          ${
+            String(current) === value
+              ? 'selected'
+              : ''
+          }
+        >
+          ${label}
+        </option>
+        `
+    )
+    .join('');
+}
+
+async function saveCase(id) {
+
+  const status =
+    $('caseStatus')?.value ||
+    'OPEN';
+
+  const complaint =
+    $('caseComplaint')
+      ?.value
+      .trim() ||
+    '';
+
+  const diagnosis =
+    $('caseDiagnosis')
+      ?.value
+      .trim() ||
+    '';
+
+  const note =
+    $('caseStatusNote')
+      ?.value
+      .trim() ||
+    '';
+
+  try {
+
+    await api(
+      `/cases/${encodeURIComponent(id)}`,
+      {
+        method: 'PATCH',
+
+        body: JSON.stringify({
+          complaint,
+          diagnosis
+        })
+      }
+    );
+
+    await api(
+      `/cases/${encodeURIComponent(id)}/status`,
+      {
+        method: 'PATCH',
+
+        body: JSON.stringify({
+          status,
+          note
+        })
+      }
+    );
+
+    toast(
+      'تغییرات پرونده با موفقیت ذخیره شد'
+    );
+
+    await loadAdminData();
+
+    await openAdminCase(id);
+
+  } catch (err) {
+
+    toast(
+      err.message ||
+      'ذخیره پرونده انجام نشد'
+    );
+  }
+}
+
+/* =========================
+   RECEPTION
+   ========================= */
+
+function renderAdminReception(root) {
+
+  root.innerHTML = `
+
+    <section class="section">
+
+      <div class="section-heading">
+
+        <div>
+
+          <span class="eyebrow">
+            NEW WORK ORDER
+          </span>
+
+          <h2>
+            پذیرش جدید
+          </h2>
+
+          <p>
+            ثبت مشتری، موتورسیکلت و درخواست تعمیر
+          </p>
+
+        </div>
+
+      </div>
+
+      <div class="workspace">
+
+        <div class="panel">
+
+          <div class="panel-title">
+
+            <h3>
+              اطلاعات مشتری
+            </h3>
+
+            <span class="section-number">
+              01
+            </span>
+
+          </div>
+
+          <form
+            class="case-form"
+            onsubmit="submitReception(event)"
+          >
+
+            <div class="field">
+
+              <label>
+                نام و نام خانوادگی
+              </label>
+
+              <input
+                id="adminCustomerName"
+                required
+              >
+
+            </div>
+
+            <div class="field">
+
+              <label>
+                موبایل
+              </label>
+
+              <input
+                id="adminCustomerPhone"
+                inputmode="tel"
+                required
+              >
+
+            </div>
+
+            <div class="panel-title">
+
+              <h3>
+                موتورسیکلت
+              </h3>
+
+              <span class="section-number">
+                02
+              </span>
+
+            </div>
+
+            <div class="field">
+
+              <label>
+                برند / مدل
+              </label>
+
+              <input
+                id="adminBikeModel"
+                required
+              >
+
+            </div>
+
+            <div class="field">
+
+              <label>
+                پلاک / شناسه
+              </label>
+
+              <input
+                id="adminBikePlate"
+                required
+              >
+
+            </div>
+
+            <div class="field">
+
+              <label>
+                کیلومتر
+              </label>
+
+              <input
+                id="adminBikeKm"
+                inputmode="numeric"
+              >
+
+            </div>
+
+            <div class="panel-title">
+
+              <h3>
+                درخواست تعمیر
+              </h3>
+
+              <span class="section-number">
+                03
+              </span>
+
+            </div>
+
+            <div class="field">
+
+              <label>
+                شرح مشکل
+              </label>
+
+              <textarea
+                id="adminProblem"
+                rows="6"
+                required
+              ></textarea>
+
+            </div>
+
+            <button
+              class="primary-btn"
+              type="submit"
+            >
+              ثبت پذیرش
+            </button>
+
+          </form>
+
+        </div>
+
+      </div>
+
+    </section>
+  `;
+}
+
+async function submitReception(event) {
+
+  event.preventDefault();
+
+  const name =
+    $('adminCustomerName')
+      .value
+      .trim();
+
+  const phone =
+    $('adminCustomerPhone')
+      .value
+      .trim();
+
+  const model =
+    $('adminBikeModel')
+      .value
+      .trim();
+
+  const plate =
+    $('adminBikePlate')
+      .value
+      .trim();
+
+  const mileageRaw =
+    $('adminBikeKm')
+      .value
+      .trim();
+
+  const complaint =
+    $('adminProblem')
+      .value
+      .trim();
+
+  if (
+    !name ||
+    !phone ||
+    !model ||
+    !plate ||
+    !complaint
+  ) {
+
+    toast(
+      'نام، موبایل، مدل، پلاک و شرح مشکل الزامی است'
+    );
+
+    return;
+  }
+
+  try {
+
+    let customer =
+      state.customers.find(
+        c =>
+          String(
+            c.phone || ''
+          ).replace(
+            /\D/g,
+            ''
+          ) ===
+          phone.replace(
+            /\D/g,
+            ''
+          )
+      );
+
+    if (!customer) {
+
+      const created =
+        await api(
+          '/customers',
+          {
+            method: 'POST',
+
+            body:
+              JSON.stringify({
+                name,
+                phone
+              })
+          }
+        );
+
+      customer =
+        created?.customer ||
+        created?.data;
+    }
+
+    if (!customer?.id) {
+
+      throw new Error(
+        'ثبت یا یافتن مشتری انجام نشد'
+      );
+    }
+
+    const customerBikes =
+      extractMotorcycles(
+        await api(
+          `/motorcycles?customer_id=${encodeURIComponent(
+            customer.id
+          )}`
+        )
+      );
+
+    let motorcycle =
+      customerBikes.find(
+        m =>
+          String(
+            m.plate ||
+            m.plate_number ||
+            ''
+          ).trim() ===
+          plate
+      );
+
+    if (!motorcycle) {
+
+      const createdBike =
+        await api(
+          '/motorcycles',
+          {
+            method: 'POST',
+
+            body:
+              JSON.stringify({
+                customer_id:
+                  customer.id,
+
+                plate,
+
+                model,
+
+                brand:
+                  '',
+
+                mileage:
+                  mileageRaw
+                    ? Number(
+                        mileageRaw
+                      )
+                    : null
+              })
+          }
+        );
+
+      motorcycle =
+        createdBike?.motorcycle ||
+        createdBike?.data;
+    }
+
+    if (!motorcycle?.id) {
+
+      throw new Error(
+        'ثبت یا یافتن موتورسیکلت انجام نشد'
+      );
+    }
+
+    const createdCase =
+      await api(
+        '/cases',
+        {
+          method: 'POST',
+
+          body:
+            JSON.stringify({
+              customer_id:
+                customer.id,
+
+              motorcycle_id:
+                motorcycle.id,
+
+              complaint,
+
+              status:
+                'OPEN',
+
+              priority:
+                'NORMAL'
+            })
+        }
+      );
+
+    const newCase =
+      createdCase?.case ||
+      createdCase?.data ||
+      createdCase;
+
+    toast(
+      `پذیرش با موفقیت ثبت شد${
+        newCase?.case_code
+          ? ' • کد: ' +
+            newCase.case_code
+          : ''
+      }`
+    );
+
+    event.target.reset();
+
+    await loadAdminData();
+
+    renderAdminPage(
+      'dashboard'
+    );
+
+  } catch (err) {
+
+    toast(
+      err.message ||
+      'ثبت پذیرش انجام نشد'
+    );
+  }
+}
+
+/* =========================
+   WORKSHOP
+   ========================= */
+
+function renderAdminWorkshop(root) {
+
+  const active =
+    state.cases.filter(
+      c =>
+        !isClosedCase(
+          c.status
+        )
+    );
+
+  root.innerHTML = `
+
+    <section class="section">
+
+      <div class="section-heading">
+
+        <div>
+
+          <span class="eyebrow">
+            WORKSHOP
+          </span>
+
+          <h2>
+            وضعیت تعمیرگاه
+          </h2>
+
+          <p>
+            موتورسیکلت‌های فعال داخل تعمیرگاه
+          </p>
+
+        </div>
+
+      </div>
+
+      <div class="panel">
+
+        <div class="records">
+
+          ${renderAdminCaseRows(
+            active
+          )}
+
+        </div>
+
+      </div>
+
+    </section>
+  `;
+}
+
+/* =========================
+   LOGOUT
+   ========================= */
+
+async function logout() {
+
+  try {
+
+    if (token()) {
+
+      await api(
+        '/auth/logout',
+        {
+          method: 'POST'
+        }
+      );
+    }
+
+  } catch {}
+
+  clearSession();
+
+  renderPublic();
+
+  window.scrollTo(
+    0,
+    0
+  );
+
+  toast(
+    'از حساب مدیریت خارج شدید'
+  );
+}
+
+/* =========================
+   UI
+   ========================= */
+
+function scrollToId(id) {
+
+  document
+    .getElementById(id)
+    ?.scrollIntoView({
+      behavior: 'smooth'
+    });
+}
+
+/* =========================
+   BOOT
+   ========================= */
+
+async function boot() {
+
+  loadSession();
+
+  /*
+    If a previous session exists,
+    verify it against the backend.
+  */
+
+  if (
+    state.user &&
+    token()
+  ) {
+
+    try {
+
+      const me =
+        await api(
+          '/auth/me'
+        );
+
+      state.user =
+        me?.user ||
+        me?.account ||
+        me;
+
+      localStorage.setItem(
+        USER_KEY,
+        JSON.stringify(
+          state.user
+        )
+      );
+
+      await loadAdminData();
+
+      renderAdmin();
+
+      return;
+
+    } catch {
+
+      clearSession();
+    }
+  }
+
+  await loadPublicCases();
+
+  renderPublic();
+}
+
+document.addEventListener(
+  'DOMContentLoaded',
+  boot
+);
+
+/* =========================
+   GLOBALS
+   ========================= */
+
+window.showLogin =
+  showLogin;
+
+window.submitLogin =
+  submitLogin;
+
+window.trackCase =
+  trackCase;
+
+window.submitRequest =
+  submitRequest;
+
+window.scrollToId =
+  scrollToId;
+
+window.logout =
+  logout;
+
+window.renderAdminPage =
+  renderAdminPage;
+
+window.filterAdminCases =
+  filterAdminCases;
+
+window.openAdminCase =
+  openAdminCase;
+
+window.saveCase =
+  saveCase;
+
+window.submitReception =
+  submitReception;
