@@ -96,7 +96,6 @@ function authHeaders() {
 }
 
 async function api(path, options = {}) {
-
   const response = await fetch(
     API_URL.replace(/\/$/, '') + path,
     {
@@ -115,7 +114,6 @@ async function api(path, options = {}) {
   } catch {}
 
   if (!response.ok) {
-
     if (response.status === 401) {
       clearSession();
     }
@@ -131,25 +129,17 @@ async function api(path, options = {}) {
 }
 
 function toast(message, type = '') {
-
   let el = $('mcToast');
 
   if (!el) {
-
     el = document.createElement('div');
-
     el.id = 'mcToast';
-
     el.className = 'toast';
-
     document.body.appendChild(el);
   }
 
   el.textContent = message;
-
-  el.className =
-    `toast ${type}`;
-
+  el.className = `toast ${type}`;
   el.style.display = 'block';
 
   clearTimeout(window.__toastTimer);
@@ -172,6 +162,7 @@ function statusClass(status) {
     DELIVERED: 'status-completed',
     CANCELLED: 'status-default'
   };
+
   return map[status] || 'status-default';
 }
 
@@ -187,15 +178,25 @@ function statusText(status) {
     DELIVERED: 'تحویل شده',
     CANCELLED: 'لغو شده'
   };
+
   return map[status] || status || 'ثبت شده';
 }
 
 function isClosedCase(status) {
-  return ['DELIVERED', 'CANCELLED'].includes(status);
+  return [
+    'DELIVERED',
+    'CANCELLED'
+  ].includes(status);
 }
 
 function caseCode(c) {
-  return c?.case_code || c?.caseCode || c?.code || c?.id || '-';
+  return (
+    c?.case_code ||
+    c?.caseCode ||
+    c?.code ||
+    c?.id ||
+    '-'
+  );
 }
 
 /* =========================
@@ -203,7 +204,6 @@ function caseCode(c) {
    ========================= */
 
 function extractCases(data) {
-
   if (Array.isArray(data?.cases)) {
     return data.cases;
   }
@@ -224,7 +224,6 @@ function extractCases(data) {
 }
 
 function extractCustomers(data) {
-
   if (Array.isArray(data?.customers)) {
     return data.customers;
   }
@@ -245,7 +244,6 @@ function extractCustomers(data) {
 }
 
 function extractMotorcycles(data) {
-
   if (Array.isArray(data?.motorcycles)) {
     return data.motorcycles;
   }
@@ -270,8 +268,6 @@ function extractMotorcycles(data) {
    ========================= */
 
 async function loadPublicCases() {
-  // The v1.0 backend protects /cases. Public tracking must use a dedicated
-  // public endpoint, so the public page does not preload private cases.
   state.cases = [];
 }
 
@@ -285,19 +281,23 @@ async function loadAdminData() {
 
   if (results[0].status === 'fulfilled') {
     const data = results[0].value;
-    state.dashboard = data?.dashboard || null;
+    state.dashboard =
+      data?.dashboard || null;
   }
 
   if (results[1].status === 'fulfilled') {
-    state.cases = extractCases(results[1].value);
+    state.cases =
+      extractCases(results[1].value);
   }
 
   if (results[2].status === 'fulfilled') {
-    state.customers = extractCustomers(results[2].value);
+    state.customers =
+      extractCustomers(results[2].value);
   }
 
   if (results[3].status === 'fulfilled') {
-    state.motorcycles = extractMotorcycles(results[3].value);
+    state.motorcycles =
+      extractMotorcycles(results[3].value);
   }
 }
 
@@ -306,7 +306,6 @@ async function loadAdminData() {
    ========================= */
 
 function renderPublic() {
-
   document.body.innerHTML = `
 
     <div class="shell">
@@ -376,18 +375,14 @@ function renderPublic() {
             </div>
 
             <h2>
-
               تعمیرگاه حرفه‌ای،
               <br>
               برای موتورسیکلت حرفه‌ای
-
             </h2>
 
             <p>
-
               سرویس، تعمیر، عیب‌یابی و نگهداری تخصصی
               موتورسیکلت با فرآیند شفاف و قابل پیگیری.
-
             </p>
 
             <div class="hero-actions">
@@ -518,18 +513,14 @@ function renderPublic() {
             </span>
 
             <h2>
-
               سریع، دقیق،
               <br>
               بدون دردسر
-
             </h2>
 
             <p>
-
               فرآیند پذیرش و پیگیری تعمیر را ساده کرده‌ایم
               تا همیشه بدانید موتورسیکلت شما در چه مرحله‌ای است.
-
             </p>
 
             <div class="express-badge">
@@ -658,7 +649,10 @@ function renderPublic() {
                 required
               >
 
-              <button class="primary-btn">
+              <button
+                class="primary-btn"
+                type="submit"
+              >
                 پیگیری
               </button>
 
@@ -837,11 +831,11 @@ async function trackCase(event) {
   const result =
     $('trackingResult');
 
-  result.innerHTML =
-    `<div class="status-result">پیگیری عمومی در حال آماده‌سازی است.</div>`;
-
-  // Backend v1.0 intentionally requires authentication for /cases?code=...
-  // Do not expose protected case data from the public website.
+  result.innerHTML = `
+    <div class="status-result">
+      پیگیری عمومی در حال آماده‌سازی است.
+    </div>
+  `;
 }
 
 /* =========================
@@ -849,7 +843,6 @@ async function trackCase(event) {
    ========================= */
 
 async function submitRequest(event) {
-
   event.preventDefault();
 
   const payload = {
@@ -875,7 +868,6 @@ async function submitRequest(event) {
       '/customer-requests',
       {
         method: 'POST',
-
         body:
           JSON.stringify(payload)
       }
@@ -1027,7 +1019,8 @@ async function submitLogin(event) {
 
     if (button) {
 
-      button.disabled = true;
+      button.disabled =
+        true;
 
       button.textContent =
         'در حال ورود...';
@@ -1039,32 +1032,21 @@ async function submitLogin(event) {
         {
           method: 'POST',
 
-          body: JSON.stringify({
-            username,
-            password
-          })
+          body:
+            JSON.stringify({
+              username,
+              password
+            })
         }
       );
 
-    /*
-      Backend v0.8.0 returns:
-
-      {
-        ok: true,
-        token: "...",
-        user: {
-          id,
-          username,
-          role
-        }
-      }
-    */
-
     const user =
-      data?.user || null;
+      data?.user ||
+      null;
 
     const jwt =
-      data?.token || '';
+      data?.token ||
+      '';
 
     if (
       !data?.ok ||
@@ -1082,13 +1064,10 @@ async function submitLogin(event) {
       jwt
     );
 
-    /*
-      Verify the session against
-      the real backend.
-    */
-
     const me =
-      await api('/auth/me');
+      await api(
+        '/auth/me'
+      );
 
     state.user =
       me?.user ||
@@ -1101,7 +1080,8 @@ async function submitLogin(event) {
       )
     );
 
-    $('loginModal')?.remove();
+    $('loginModal')
+      ?.remove();
 
     toast(
       'ورود موفق بود'
@@ -1124,7 +1104,8 @@ async function submitLogin(event) {
 
     if (button) {
 
-      button.disabled = false;
+      button.disabled =
+        false;
 
       button.textContent =
         originalText;
@@ -1289,9 +1270,7 @@ function renderAdminDashboard(root) {
     Number(
       d.readyForDelivery ??
       state.cases.filter(
-        c =>
-          c.status ===
-          'READY_FOR_DELIVERY'
+        c => c.status === 'READY_FOR_DELIVERY'
       ).length
     );
 
@@ -1354,67 +1333,27 @@ function renderAdminDashboard(root) {
       <div class="stats-grid">
 
         <div class="stat-card">
-
-          <div class="stat-icon">
-            🏍
-          </div>
-
-          <strong>
-            ${active}
-          </strong>
-
-          <span>
-            پرونده فعال
-          </span>
-
+          <div class="stat-icon">🏍</div>
+          <strong>${active}</strong>
+          <span>پرونده فعال</span>
         </div>
 
         <div class="stat-card">
-
-          <div class="stat-icon">
-            ✓
-          </div>
-
-          <strong>
-            ${ready}
-          </strong>
-
-          <span>
-            آماده تحویل
-          </span>
-
+          <div class="stat-icon">✓</div>
+          <strong>${ready}</strong>
+          <span>آماده تحویل</span>
         </div>
 
         <div class="stat-card">
-
-          <div class="stat-icon">
-            👤
-          </div>
-
-          <strong>
-            ${customers}
-          </strong>
-
-          <span>
-            مشتریان
-          </span>
-
+          <div class="stat-icon">👤</div>
+          <strong>${customers}</strong>
+          <span>مشتریان</span>
         </div>
 
         <div class="stat-card">
-
-          <div class="stat-icon">
-            📋
-          </div>
-
-          <strong>
-            ${cases}
-          </strong>
-
-          <span>
-            کل پرونده‌ها
-          </span>
-
+          <div class="stat-icon">📋</div>
+          <strong>${cases}</strong>
+          <span>کل پرونده‌ها</span>
         </div>
 
       </div>
@@ -1422,35 +1361,15 @@ function renderAdminDashboard(root) {
       <div class="stats-grid">
 
         <div class="stat-card">
-
-          <div class="stat-icon">
-            ⏳
-          </div>
-
-          <strong>
-            ${waitingApproval}
-          </strong>
-
-          <span>
-            در انتظار تأیید
-          </span>
-
+          <div class="stat-icon">⏳</div>
+          <strong>${waitingApproval}</strong>
+          <span>در انتظار تأیید</span>
         </div>
 
         <div class="stat-card">
-
-          <div class="stat-icon">
-            💳
-          </div>
-
-          <strong>
-            ${money(unpaid)}
-          </strong>
-
-          <span>
-            مانده مطالبات
-          </span>
-
+          <div class="stat-icon">💳</div>
+          <strong>${money(unpaid)}</strong>
+          <span>مانده مطالبات</span>
         </div>
 
       </div>
@@ -1570,7 +1489,9 @@ function filterAdminCases() {
   if (container) {
 
     container.innerHTML =
-      renderAdminCaseRows(list);
+      renderAdminCaseRows(
+        list
+      );
   }
 }
 
@@ -1656,7 +1577,7 @@ function renderAdminCaseRows(list) {
 
 async function openAdminCase(id) {
 
-  let listCase =
+  const listCase =
     state.cases.find(
       item =>
         String(item.id) ===
@@ -1711,8 +1632,7 @@ async function openAdminCase(id) {
         : [];
 
     const financial =
-      fresh?.financial ||
-      {
+      fresh?.financial || {
         total: 0,
         paid: 0,
         balance: 0
@@ -1798,78 +1718,39 @@ async function openAdminCase(id) {
           <div class="detail-grid">
 
             <div class="detail-item">
-
-              <span>
-                موبایل
-              </span>
-
-              <strong>
-                ${esc(phone || '-')}
-              </strong>
-
+              <span>موبایل</span>
+              <strong>${esc(phone || '-')}</strong>
             </div>
 
             <div class="detail-item">
-
-              <span>
-                موتورسیکلت
-              </span>
-
-              <strong>
-                ${esc(bike)}
-              </strong>
-
+              <span>موتورسیکلت</span>
+              <strong>${esc(bike)}</strong>
             </div>
 
             <div class="detail-item">
-
-              <span>
-                پلاک
-              </span>
-
-              <strong>
-                ${esc(plate || '-')}
-              </strong>
-
+              <span>پلاک</span>
+              <strong>${esc(plate || '-')}</strong>
             </div>
 
             <div class="detail-item">
-
-              <span>
-                مبلغ کل
-              </span>
-
+              <span>مبلغ کل</span>
               <strong>
-                ${money(financial.total)}
-                تومان
+                ${money(financial.total)} تومان
               </strong>
-
             </div>
 
             <div class="detail-item">
-
-              <span>
-                پرداخت شده
-              </span>
-
+              <span>پرداخت شده</span>
               <strong>
-                ${money(financial.paid)}
-                تومان
+                ${money(financial.paid)} تومان
               </strong>
-
             </div>
 
             <div class="detail-item">
-
-              <span>
-                مانده
-              </span>
-
+              <span>مانده</span>
               <strong>
-                ${money(financial.balance)}
-                تومان
+                ${money(financial.balance)} تومان
               </strong>
-
             </div>
 
           </div>
@@ -1971,41 +1852,49 @@ async function openAdminCase(id) {
                 ? `
                   <div class="records">
 
-                    ${
-                      tasks.map(t => `
+                    ${tasks.map(t => `
 
-                        <div class="mini-record">
+                      <div class="mini-record">
 
-                          <div class="avatar">
-                            🔧
-                          </div>
+                        <div class="avatar">
+                          🔧
+                        </div>
 
-                          <div>
+                        <div>
 
-                            <strong>
-                              ${esc(t.title || 'کار')}
-                            </strong>
+                          <strong>
+                            ${esc(
+                              t.title ||
+                              'کار'
+                            )}
+                          </strong>
 
-                            <span>
-                              ${esc(t.technician_name || '')}
-                              ${
-                                t.status
-                                  ? ' • ' + esc(t.status)
-                                  : ''
-                              }
-                            </span>
+                          <span>
+                            ${esc(
+                              t.technician_name ||
+                              ''
+                            )}
 
-                            <small>
-                              ${money(t.labor_cost || 0)}
-                              تومان
-                            </small>
+                            ${
+                              t.status
+                                ? ' • ' +
+                                  esc(t.status)
+                                : ''
+                            }
+                          </span>
 
-                          </div>
+                          <small>
+                            ${money(
+                              t.labor_cost ||
+                              0
+                            )} تومان
+                          </small>
 
                         </div>
 
-                      `).join('')
-                    }
+                      </div>
+
+                    `).join('')}
 
                   </div>
                 `
@@ -2025,7 +1914,6 @@ async function openAdminCase(id) {
             </span>
 
             <p>
-
               ${
                 estimate
                   ? `
@@ -2035,14 +1923,12 @@ async function openAdminCase(id) {
                     ${money(
                       estimate.total ||
                       financial.total
-                    )}
-                    تومان
+                    )} تومان
                   `
                   : `
                     هنوز برآوردی ثبت نشده است.
                   `
               }
-
             </p>
 
           </div>
@@ -2054,15 +1940,17 @@ async function openAdminCase(id) {
             </span>
 
             <p>
-
               ${
                 payments.length
                   ? payments
                       .map(
                         p =>
-                          `${money(p.amount || 0)} تومان${
+                          `${money(
+                            p.amount || 0
+                          )} تومان${
                             p.method
-                              ? ' • ' + esc(p.method)
+                              ? ' • ' +
+                                esc(p.method)
                               : ''
                           }`
                       )
@@ -2071,7 +1959,6 @@ async function openAdminCase(id) {
                     پرداختی ثبت نشده است.
                   `
               }
-
             </p>
 
           </div>
@@ -2083,7 +1970,6 @@ async function openAdminCase(id) {
             </span>
 
             <p>
-
               ${
                 notes.length
                   ? notes
@@ -2100,7 +1986,6 @@ async function openAdminCase(id) {
                     یادداشتی ثبت نشده است.
                   `
               }
-
             </p>
 
           </div>
@@ -2119,12 +2004,10 @@ async function openAdminCase(id) {
         <div class="panel">
 
           <div class="status-result">
-
             ${esc(
               err.message ||
               'دریافت جزئیات پرونده انجام نشد'
             )}
-
           </div>
 
           <button
@@ -2193,16 +2076,17 @@ function statusOptions(current) {
     .map(
       ([value, label]) =>
         `
-        <option
-          value="${value}"
-          ${
-            String(current) === value
-              ? 'selected'
-              : ''
-          }
-        >
-          ${label}
-        </option>
+          <option
+            value="${value}"
+            ${
+              String(current) ===
+              value
+                ? 'selected'
+                : ''
+            }
+          >
+            ${label}
+          </option>
         `
     )
     .join('');
@@ -2239,10 +2123,11 @@ async function saveCase(id) {
       {
         method: 'PATCH',
 
-        body: JSON.stringify({
-          complaint,
-          diagnosis
-        })
+        body:
+          JSON.stringify({
+            complaint,
+            diagnosis
+          })
       }
     );
 
@@ -2251,10 +2136,11 @@ async function saveCase(id) {
       {
         method: 'PATCH',
 
-        body: JSON.stringify({
-          status,
-          note
-        })
+        body:
+          JSON.stringify({
+            status,
+            note
+          })
       }
     );
 
@@ -2503,14 +2389,8 @@ async function submitReception(event) {
         c =>
           String(
             c.phone || ''
-          ).replace(
-            /\D/g,
-            ''
-          ) ===
-          phone.replace(
-            /\D/g,
-            ''
-          )
+          ).replace(/\D/g, '') ===
+          phone.replace(/\D/g, '')
       );
 
     if (!customer) {
@@ -2557,8 +2437,7 @@ async function submitReception(event) {
             m.plate ||
             m.plate_number ||
             ''
-          ).trim() ===
-          plate
+          ).trim() === plate
       );
 
     if (!motorcycle) {
@@ -2578,14 +2457,11 @@ async function submitReception(event) {
 
                 model,
 
-                brand:
-                  '',
+                brand: '',
 
                 mileage:
                   mileageRaw
-                    ? Number(
-                        mileageRaw
-                      )
+                    ? Number(mileageRaw)
                     : null
               })
           }
@@ -2767,11 +2643,6 @@ function scrollToId(id) {
 async function boot() {
 
   loadSession();
-
-  /*
-    If a previous session exists,
-    verify it against the backend.
-  */
 
   if (
     state.user &&
